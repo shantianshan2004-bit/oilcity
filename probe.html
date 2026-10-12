@@ -76,6 +76,21 @@ try{
   }else{
     log("9. 事件订阅可用      : 否","bad");
   }
+
+  /* ---- 10. 验证码链路自检（不发真实邮件，只验证 SDK 形状） ---- */
+  log("");
+  log("——— 验证码登录链路 ———","dim");
+  log("10. signInWithOtp    : "+(typeof cloud.auth.signInWithOtp==="function"?"可用":"缺失"),"dim");
+  log("    verifyOtp        : "+(typeof cloud.auth.verifyOtp==="function"?"可用":"缺失"),"dim");
+  log("    getUser          : "+(typeof cloud.auth.getUser==="function"?"可用":"缺失"),"dim");
+  log("    说明：点「寄送验证码」后应看到 POST /v1/verification，","dim");
+  log("          提交验证码时应看到 /v1/verification/verify → /v1/signin。","dim");
+  if(peeked&&peeked.accessToken){
+    try{
+      const g=await cloud.auth.getUser();
+      log("11. getUser()        : "+(g&&g.data&&g.data.email?("邮箱 "+g.data.email):"未返回邮箱"), (g&&g.data&&g.data.email)?"ok":"dim");
+    }catch(e){ log("11. getUser()        : 抛错 — "+(e&&e.message||e),"bad"); }
+  }
 }catch(e){
   log("4. createClient    : 失败 — "+(e&&e.message||e),"bad");
   log("");

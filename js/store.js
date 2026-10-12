@@ -226,6 +226,21 @@
     return state.session;
   }
 
+  /* 会话里的 user 只有 id/name/avatar（SDK 的 parseSession 不含 email），
+     邮箱等信息来自 auth.getUser()。这一步只补一次，失败不影响登录。 */
+  async function hydrateUser() {
+    if (!state.cloud || !state.session) return;
+    const auth = state.cloud.auth;
+    if (typeof auth.getUser !== "function") return;
+    try {
+      const res = await auth.getUser();
+      const u = res && res.data ? res.data : null;
+      if (u && (u.email || u.phone)) {
+        state.session.user = Object.assign({}, state.session.user, u);
+      }
+    } catch (_) {}
+  }
+
   async function readSession() {
     if (state.mode !== "cloud" || !state.cloud) return null;
     const auth = state.cloud.auth;
@@ -234,6 +249,7 @@
       const peeked = auth.sessions && auth.sessions.peek && auth.sessions.peek();
       if (peeked && peeked.accessToken) {
         applySession(peeked);
+        await hydrateUser();
         return state.session;
       }
       /* 再让 SDK 校验/续期 */
@@ -241,6 +257,7 @@
       const sess = res && res.data ? res.data : res;
       if (sess && sess.accessToken) {
         applySession(sess);
+        await hydrateUser();
         return state.session;
       }
       applySession(null);
@@ -265,12 +282,26 @@
     } catch (_) {}
   }
 
+  /* 暂存 signInWithOtp 返回的 {verificationId, isExistingUser, verify}
+     —— 它带着 isExistingUser 标志，必须原样交回 verifyOtp，
+     否则后端会用错分支（新用户走注册、老用户走登录）。 */
+  let pendingOtp = null;
+
   async function sendCode(email) {
     if (state.mode !== "cloud") throw new Error("雲端未連接，無法登入。");
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
       throw new Error("請填寫有效的信箱。");
-    const res = await state.cloud.auth.sendOtp({ email });
-    if (res && res.error) throw new Error(res.error.message || "驗證碼寄送失敗。");
+
+    /* 老用户走 signIn；新用户会被后端拒绝。
+       统一用 signInWithOtp：它同时给出 verificationId 与 isExistingUser。 */
+    const res = await state.cloud.auth.signInWithOtp({ email });
+    if (!res || res.error) {
+      const m = res && res.error && res.error.message;
+      throw new Error(m || "驗證碼寄送失敗，請稍後再試。");
+    }
+    pendingOtp = res.data || null;
+    if (!pendingOtp || !pendingOtp.verificationId)
+      throw new Error("雲端未回傳驗證標識。");
     return true;
   }
 
@@ -278,28 +309,42 @@
     if (state.mode !== "cloud") throw new Error("雲端未連接，無法登入。");
     const token = String(code || "").trim();
     if (!token) throw new Error("請填寫驗證碼。");
+    if (!pendingOtp || !pendingOtp.verificationId)
+      throw new Error("請先點「寄送驗證碼」，再輸入驗證碼。");
 
-    const auth = state.cloud.auth;
     let res;
-
-    /* 先嘗試 signInWithOtp → 拿到 verificationId 后 verifyOtp
-       （这是 SDK 推荐的邮箱验证码路径） */
-    if (typeof auth.signInWithOtp === "function") {
-      const otp = await auth.sendOtp({ email });
-      if (!otp || otp.error) throw new Error((otp && otp.error && otp.error.message) || "驗證碼寄送失敗。");
-      const vid = otp.data && otp.data.verificationId;
-      if (!vid) throw new Error("雲端未回傳驗證標識。");
-      res = await auth.verifyOtp({ email, verificationId: vid, token });
-    } else {
-      res = await auth.verifyOtp({ email, token });
+    try {
+      /* SDK 提供的 verify 已绑定 verificationId 与 isExistingUser */
+      res =
+        typeof pendingOtp.verify === "function"
+          ? await pendingOtp.verify({ token })
+          : await state.cloud.auth.verifyOtp({
+              email,
+              verificationId: pendingOtp.verificationId,
+              token,
+              isExistingUser: pendingOtp.isExistingUser,
+            });
+    } catch (err) {
+      throw new Error(
+        (err && err.error && err.error.message) || err.message || "驗證失敗。"
+      );
     }
 
-    if (res && res.error) throw new Error(res.error.message || "驗證失敗。");
+    if (res && res.error) {
+      const e = res.error;
+      const m = e.message || "";
+      /* 过期/错误是最常见的两种，给出可操作的提示 */
+      if (/expired|過期/i.test(m)) throw new Error("驗證碼已過期，請重新寄送。");
+      if (/invalid|錯誤|不正確/i.test(m)) throw new Error("驗證碼不正確，請核對後重試。");
+      if (e.kind === "rate-limited") throw new Error("嘗試過於頻繁，請稍後再試。");
+      throw new Error(m || "驗證失敗。");
+    }
+
     const sess = res && res.data ? res.data : res;
     applySession(sess);
-    if (!state.session) {
-      await readSession();
-    }
+    if (!state.session) await readSession();
+    else await hydrateUser();
+    pendingOtp = null;
     return state.session;
   }
 
