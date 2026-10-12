@@ -53,6 +53,27 @@ try{
     if(r&&r.error) log("6. db 读取 contents   : 拒绝 — "+r.error.message,"bad");
     else log("6. db 读取 contents   : 成功，返回 "+((r&&r.data||[]).length)+" 行","ok");
   }catch(e){log("6. db 读取 contents   : 抛错 — "+(e&&e.message||e),"bad");}
+
+  /* ---- 7. 登录态持久化 ---- */
+  log("");
+  log("——— 登录态持久化检查 ———","dim");
+  const SESSION_KEY="workbuddy-cloud.session."+CFG.publishableKey;
+  let lsRaw=null;
+  try{ lsRaw=localStorage.getItem(SESSION_KEY); }catch(e){}
+  log("7. localStorage 键名 : "+(lsRaw?"已存在":"（无，尚未登录过）"), lsRaw?"ok":"dim");
+  const peeked=(cloud.auth.sessions&&cloud.auth.sessions.peek)?cloud.auth.sessions.peek():null;
+  if(peeked&&peeked.accessToken){
+    log("8. 持久化会话可读回  : 是 — "+(peeked.user&&(peeked.user.email||peeked.user.id)||"已登录"),"ok");
+    log("   令牌过期时间       : "+new Date(peeked.expiresAt).toLocaleString(),"dim");
+    log("   → 刷新页面应保持登录","ok");
+  }else{
+    log("8. 持久化会话可读回  : 无（未登录，属正常）","dim");
+  }
+  if(typeof cloud.auth.onAuthStateChange==="function"){
+    log("9. 事件订阅可用      : 是（INITIAL_SESSION / SIGNED_IN / SIGNED_OUT）","ok");
+  }else{
+    log("9. 事件订阅可用      : 否","bad");
+  }
 }catch(e){
   log("4. createClient    : 失败 — "+(e&&e.message||e),"bad");
   log("");
