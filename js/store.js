@@ -520,34 +520,110 @@
     return `${uid ? "users/" + uid : "shared/anon"}/${stamp}-${safe}`;
   }
 
+  /* 上传/取链路的诊断日志。失败时把每一步都摊开，便于定位是哪一层出的问题。 */
+  const trace = [];
+  function logTrace(step, detail) {
+    trace.push({
+      step,
+      detail: detail == null ? "" : String(detail),
+      at: new Date().toLocaleTimeString(),
+    });
+    if (trace.length > 60) trace.shift();
+  }
+
   async function upload(kind, file, onProgress) {
-    if (state.mode !== "cloud") throw new Error("雲端未連接，無法上傳。");
-    if (!isSignedIn()) throw new Error("請先登入，再上傳檔案。");
+    trace.length = 0;
+    logTrace("开始上传", `${kind} · ${file && file.name} · ${file && file.size} bytes`);
+
+    if (state.mode !== "cloud") {
+      logTrace("中止", "云端未连接，state.mode = " + state.mode);
+      throw new Error("雲端未連接，無法上傳。");
+    }
+    if (!isSignedIn()) {
+      logTrace("中止", "未登录（无 accessToken）——存储操作必须登录后才被允许");
+      throw new Error("請先登入，再上傳檔案。");
+    }
     const bad = validateFile(kind, file);
-    if (bad) throw new Error(bad);
+    if (bad) {
+      logTrace("中止", "文件校验未通过：" + bad);
+      throw new Error(bad);
+    }
 
     const storage = storageBucket();
-    if (!storage) throw new Error("雲端儲存未就緒。");
+    if (!storage) {
+      logTrace("中止", "storage 模块不可用，cloud.storage = " + typeof (state.cloud && state.cloud.storage));
+      throw new Error("雲端儲存未就緒。");
+    }
+    logTrace("storage 模块", "就绪");
+
+    const tok = state.session && state.session.accessToken;
+    logTrace(
+      "登录令牌",
+      tok ? "已就绪（" + String(tok).slice(0, 8) + "…，长度 " + String(tok).length + "）" : "缺失"
+    );
+
+    const uid =
+      state.session && state.session.user
+        ? state.session.user.id || state.session.user.sub
+        : null;
+    logTrace("用户标识", uid || "(未取到 uid，将退回 shared 作用域)");
 
     const path = scopePath(storage, file);
-    const { data, error } = await storage.upload(path, file, {
-      upsert: true,
-      onProgress,
-    });
-    if (error) throw new Error(error.message || "上傳失敗");
-    return (data && (data.path || data.fullPath)) || path;
+    logTrace("目标路径", path);
+
+    let res;
+    try {
+      res = await storage.upload(path, file, {
+        upsert: true,
+        onProgress: (pct) => {
+          logTrace("传输中", pct == null ? "…" : Math.round(pct) + "%");
+          if (onProgress) onProgress(pct);
+        },
+      });
+    } catch (err) {
+      logTrace("请求抛错", (err && err.message) || err);
+      throw new Error("上傳請求異常：" + ((err && err.message) || err));
+    }
+
+    if (res && res.error) {
+      const m = res.error.message || JSON.stringify(res.error);
+      logTrace("服务端拒绝", m);
+      if (/credential|401|unauthenticated/i.test(m))
+        throw new Error("登录已失效，请重新登录后再上传。");
+      if (/bucket/i.test(m)) throw new Error("存储桶不可用：" + m);
+      throw new Error(m || "上傳失敗");
+    }
+
+    const savedPath = (res && res.data && (res.data.path || res.data.fullPath)) || path;
+    logTrace("上传成功", savedPath);
+    return savedPath;
   }
 
   async function signedUrl(path, seconds) {
-    if (state.mode !== "cloud" || !path) return "";
+    trace.length = 0;
+    logTrace("获取音频链接", path);
+
+    if (state.mode !== "cloud" || !path) {
+      logTrace("中止", state.mode !== "cloud" ? "云端未连接" : "路径为空");
+      return "";
+    }
     const storage = storageBucket();
-    if (!storage) return "";
-    const { data, error } = await storage.createSignedUrl(
-      path,
-      seconds || 3600
-    );
-    if (error) return "";
-    return (data && (data.signedUrl || data.url)) || "";
+    if (!storage) {
+      logTrace("中止", "storage 模块不可用");
+      return "";
+    }
+    const res = await storage.createSignedUrl(path, seconds || 3600);
+    if (res && res.error) {
+      logTrace("服务端拒绝", res.error.message || JSON.stringify(res.error));
+      return "";
+    }
+    const url = (res && res.data && (res.data.signedUrl || res.data.url)) || "";
+    logTrace(url ? "取得链接" : "未返回链接", url ? url.slice(0, 120) + "…" : "data 为空");
+    return url;
+  }
+
+  function getTrace() {
+    return trace.slice();
   }
 
   /* ============================================================
@@ -576,6 +652,7 @@
     restore,
     upload,
     signedUrl,
+    getTrace,
     validateFile,
     LIMITS,
     fmtTime,

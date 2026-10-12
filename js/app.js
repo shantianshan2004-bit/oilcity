@@ -515,9 +515,36 @@ window.App = (function () {
 
       <ul class="song-upload-list" id="suPending" hidden></ul>
       <p class="notice" id="suNote" style="padding-top:var(--space-2)"></p>
+      <div id="suTrace" hidden></div>
     `;
 
     const note = $("#suNote");
+
+    /* 把上传过程中每一步摊开显示，避免失败时只有一个不显眼的短提示 */
+    function drawTrace(heading) {
+      const box = $("#suTrace");
+      if (!box) return;
+      const rows = Store.getTrace ? Store.getTrace() : [];
+      if (!heading && !rows.length) {
+        box.hidden = true;
+        box.innerHTML = "";
+        return;
+      }
+      box.hidden = false;
+      box.innerHTML =
+        `<p class="label" style="margin-top:var(--space-3)">${esc(heading || "上传诊断")}</p>` +
+        `<ol class="song-upload-list" style="font-size:.82rem;line-height:1.7">` +
+        rows
+          .map(
+            (r) =>
+              `<li><span class="en micro">${esc(r.at)}</span> · ` +
+              `<strong>${esc(r.step)}</strong>` +
+              (r.detail ? ` — <span class="micro">${esc(r.detail)}</span>` : "") +
+              `</li>`
+          )
+          .join("") +
+        `</ol>`;
+    }
 
     /* 未登录：就地登录 */
     if (!signed && online) {
@@ -592,6 +619,7 @@ window.App = (function () {
       }
 
       note.textContent = "上傳中…";
+      drawTrace("");
       try {
         const path = await Store.upload(storeKind, file, (pct) => {
           if (pct != null) note.textContent = `上傳中 ${Math.round(pct)}%`;
@@ -613,10 +641,12 @@ window.App = (function () {
           kind === "audio" ? "更新音訊" : "更新封面"
         );
         note.textContent = "已上傳並綁定，所有讀者即時可見。";
+        drawTrace("");
         pending = null;
         mountSongUpload(Store.songs());
       } catch (err) {
         note.textContent = err.message || "上傳失敗。";
+        drawTrace("上传失败 · 逐步诊断");
       }
     });
 
@@ -791,9 +821,36 @@ window.App = (function () {
              </div>`
       }
       <p class="notice" id="sdNote" style="margin-top:var(--space-2)"></p>
+      <div id="sdTrace" hidden></div>
     `;
 
     const note = $("#sdNote");
+
+    /* 与留声机首页一致：把上传每一步摊开，失败原因一眼可见 */
+    function drawTrace(heading) {
+      const box = $("#sdTrace");
+      if (!box) return;
+      const rows = Store.getTrace ? Store.getTrace() : [];
+      if (!heading && !rows.length) {
+        box.hidden = true;
+        box.innerHTML = "";
+        return;
+      }
+      box.hidden = false;
+      box.innerHTML =
+        `<p class="label" style="margin-top:var(--space-3)">${esc(heading || "上传诊断")}</p>` +
+        `<ol class="song-upload-list" style="font-size:.82rem;line-height:1.7">` +
+        rows
+          .map(
+            (r) =>
+              `<li><span class="en micro">${esc(r.at)}</span> · ` +
+              `<strong>${esc(r.step)}</strong>` +
+              (r.detail ? ` — <span class="micro">${esc(r.detail)}</span>` : "") +
+              `</li>`
+          )
+          .join("") +
+        `</ol>`;
+    }
 
     if (!signed) {
       const msg = $("#sdMsg");
@@ -824,9 +881,12 @@ window.App = (function () {
     let kind = "audio";
     const fileEl = $("#sdFile");
     const pick = (k) => {
-      if (Store.mode !== "cloud") return;
+      if (Store.mode !== "cloud") {
+        note.textContent = "雲端未連接，無法上傳。";
+        return;
+      }
       if (!Store.isSignedIn()) {
-        note.textContent = "請先登入。";
+        note.textContent = "請先登入，再上傳。";
         return;
       }
       kind = k;
@@ -852,6 +912,7 @@ window.App = (function () {
         return;
       }
       note.textContent = "上傳中…";
+      drawTrace("");
       try {
         const path = await Store.upload(storeKind, file, (pct) => {
           if (pct != null) note.textContent = `上傳中 ${Math.round(pct)}%`;
@@ -877,6 +938,7 @@ window.App = (function () {
         setTimeout(() => location.reload(), 900);
       } catch (err) {
         note.textContent = err.message || "上傳失敗。";
+        drawTrace("上传失败 · 逐步诊断");
       }
     });
   }

@@ -119,6 +119,24 @@ try{
     }
     log("    → 上传请求应为 POST /storage/object/runtime/…","dim");
   }
+
+  /* ---- 17. 存储鉴权实测：这是上传成败的分水岭 ---- */
+  log("");
+  log("——— 存储鉴权实测（上传成败关键）———","dim");
+  log("   已知事实：数据库允许匿名读（已实测 200），","dim");
+  log("   但存储桶要求登录令牌（匿名访问返回 401/404）。","dim");
+  if(peeked&&peeked.accessToken){
+    try{
+      const r=await bucket.list("",{limit:1});
+      if(r&&r.error) log("17. 带令牌访问存储    : 被拒 — "+r.error.message,"bad");
+      else log("17. 带令牌访问存储    : 成功，可以进行上传","ok");
+    }catch(e){
+      log("17. 带令牌访问存储    : 抛错 — "+(e&&e.message||e),"bad");
+    }
+  }else{
+    log("17. 带令牌访问存储    : 跳过（当前未登录）","dim");
+    log("→ 请先在上方完成登录，再刷新本页复核此项。","bad");
+  }
 }catch(e){
   log("4. createClient    : 失败 — "+(e&&e.message||e),"bad");
   log("");
