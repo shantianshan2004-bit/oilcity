@@ -89,11 +89,17 @@
 
     try {
       await loadScript(SDK_URL);
+      const ns = window.WorkBuddyCloud || {};
+      /* SDK 的工厂函数是 createWorkBuddyCloud；createClient 是防御性兜底 */
       const factory =
-        window.WorkBuddyCloud && window.WorkBuddyCloud.createClient
-          ? window.WorkBuddyCloud.createClient
-          : window.WorkBuddyCloud;
-      if (typeof factory !== "function") throw new Error("SDK 形狀不符");
+        typeof ns.createWorkBuddyCloud === "function"
+          ? ns.createWorkBuddyCloud
+          : typeof ns.createClient === "function"
+          ? ns.createClient
+          : typeof ns === "function"
+          ? ns
+          : null;
+      if (!factory) throw new Error("SDK 形狀不符：找不到工廠函數");
 
       const cloud = await factory({
         resourceId: CFG.resourceId,

@@ -32,10 +32,14 @@ try{
 }catch(e){log("1. SDK 载入        : 失败 — "+e.message,"bad");return;}
 try{
   log("2. window.WorkBuddyCloud keys : "+Object.keys(window.WorkBuddyCloud||{}).join(", "),"dim");
-  const f=window.WorkBuddyCloud.createClient||window.WorkBuddyCloud;
-  log("3. factory 类型     : "+typeof f,"dim");
+  const ns=window.WorkBuddyCloud||{};
+  const f= typeof ns.createWorkBuddyCloud==="function" ? ns.createWorkBuddyCloud
+         : typeof ns.createClient==="function" ? ns.createClient
+         : typeof ns==="function" ? ns : null;
+  log("3. factory           : "+(f? f.name||"(anonymous)" : "找不到！"),"dim");
+  if(!f) throw new Error("SDK 沒有可用的工廠函數");
   const cloud=await f(CFG);
-  log("4. createClient    : 成功","ok");
+  log("4. createClient      : 成功","ok");
   try{
     const s=await cloud.auth.getSession();
     log("5. auth.getSession : "+(s?"有会话":"null（未登录，属正常）"),"ok");
