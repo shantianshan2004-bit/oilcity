@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 用纸色作为启动底色，避免白闪，与站点视觉一致 -->
+    <style name="Theme.OilCity" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <!-- 顶部状态栏随纸色底走深墨，避免黑条压在浅色界面上 -->
+        <item name="android:statusBarColor">@color/ink_bg</item>
+        <item name="android:navigationBarColor">@color/ink_bg</item>
+        <item name="android:statusBarColor">@color/paper</item>
+        <item name="android:navigationBarColor">@color/paper</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>
