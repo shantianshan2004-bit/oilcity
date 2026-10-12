@@ -176,7 +176,7 @@ window.CoCreate = (function () {
         }
       </p>
       <div class="field">
-        <label class="field-label">输入 slug 以确认：<span class="en">${esc(slug)}</span></label>
+        <label class="field-label">输入 slug（<span class="en">${esc(slug)}</span>）或标题（${esc(r.title)}）以确认</label>
         <input id="ccDelConfirm" type="text" autocomplete="off" placeholder="${esc(slug)}">
       </div>
       <div class="row" style="gap:var(--space-3)">
@@ -195,9 +195,16 @@ window.CoCreate = (function () {
       host.innerHTML = "";
     });
 
+    /* slug 或标题任一匹配即放行；去首尾空格，ASCII 大小写不敏感。
+       中文 slug 精确输入太苛刻（全半角、输入法差异极易失配），故放宽。 */
+    function confirmed() {
+      const v = String(input.value || "").trim().toLowerCase();
+      return v === slug.toLowerCase() || v === String(r.title || "").trim().toLowerCase();
+    }
+
     document.getElementById("ccDelGo").addEventListener("click", async () => {
-      if (String(input.value).trim() !== slug) {
-        msg.textContent = "输入的 slug 与条目不符，未执行删除。";
+      if (!confirmed()) {
+        msg.textContent = "输入的内容与该条目的 slug 或标题不符，未执行删除。";
         return;
       }
       const btn = document.getElementById("ccDelGo");
