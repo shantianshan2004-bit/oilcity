@@ -91,6 +91,34 @@ try{
       log("11. getUser()        : "+(g&&g.data&&g.data.email?("邮箱 "+g.data.email):"未返回邮箱"), (g&&g.data&&g.data.email)?"ok":"dim");
     }catch(e){ log("11. getUser()        : 抛错 — "+(e&&e.message||e),"bad"); }
   }
+
+  /* ---- 12. 存储链路自检（留声机投稿用） ---- */
+  log("");
+  log("——— 存储桶链路（音频/封面投稿）———","dim");
+  const st=cloud.storage;
+  log("12. storage.from     : "+(typeof st.from==="function"?"可用":"缺失"),"dim");
+  try{
+    st.from("media");
+    log("13. from('media')    : 通过（不该通过，SDK 已放宽？）","bad");
+  }catch(e){
+    log("13. from('media')    : 被拒 → "+e.message,"dim");
+  }
+  let bucket=null;
+  try{
+    bucket=st.from();
+    log("14. from() 默认桶    : 通过（正确用法，桶名固定为 runtime）","ok");
+  }catch(e){
+    log("14. from() 默认桶    : 被拒 → "+e.message,"bad");
+  }
+  log("15. userPath/sharedPath: "+((typeof st.userPath==="function"?"userPath ":"")+(typeof st.sharedPath==="function"?"sharedPath":"")||"缺失")+" 可用","dim");
+  if(bucket){
+    if(peeked&&peeked.accessToken&&peeked.user&&peeked.user.id){
+      log("16. 上传路径          : "+st.userPath(peeked.user.id,"<时间戳>-<文件名>"),"dim");
+    }else{
+      log("16. 上传路径          : 登录后为 users/<uid>/…，未登录投稿不可用","dim");
+    }
+    log("    → 上传请求应为 POST /storage/object/runtime/…","dim");
+  }
 }catch(e){
   log("4. createClient    : 失败 — "+(e&&e.message||e),"bad");
   log("");

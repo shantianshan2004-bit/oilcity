@@ -488,32 +488,64 @@
     return null;
   }
 
+  /* SDK 只开放一个存储桶，名字固定为 "runtime"：
+       from(e = "runtime") { if (e !== "runtime") throw ... }
+     其它桶名一律被拒。storage.from() 不传参数即拿默认桶。 */
+  function storageBucket() {
+    if (state.mode !== "cloud" || !state.cloud) return null;
+    const st = state.cloud.storage;
+    if (!st || typeof st.from !== "function") return null;
+    return st.from();
+  }
+
+  /* 当前登录用户的存储作用域。SDK 提供了 userPath/sharedPath 两个正规构造器，
+     优先用它们，避免自己拼路径踩到服务端的路径规则。 */
+  function scopePath(storage, file) {
+    const safe = String(file.name || "file")
+      .replace(/[^\w.\-\u4e00-\u9fa5]+/g, "_")
+      .slice(-80);
+    const stamp = Date.now();
+    const uid =
+      (state.session &&
+        state.session.user &&
+        (state.session.user.id || state.session.user.sub)) ||
+      null;
+
+    try {
+      if (typeof storage.userPath === "function" && uid)
+        return storage.userPath(uid, `${stamp}-${safe}`);
+      if (typeof storage.sharedPath === "function")
+        return storage.sharedPath(uid || "anon", `${stamp}-${safe}`);
+    } catch (_) {}
+    return `${uid ? "users/" + uid : "shared/anon"}/${stamp}-${safe}`;
+  }
+
   async function upload(kind, file, onProgress) {
     if (state.mode !== "cloud") throw new Error("雲端未連接，無法上傳。");
     if (!isSignedIn()) throw new Error("請先登入，再上傳檔案。");
     const bad = validateFile(kind, file);
     if (bad) throw new Error(bad);
 
-    const uid =
-      (state.session &&
-        state.session.user &&
-        (state.session.user.id || state.session.user.sub)) ||
-      "anon";
-    const safe = file.name.replace(/[^\w.\-\u4e00-\u9fa5]+/g, "_");
-    const path = `shared/${uid}/${Date.now()}-${safe}`;
+    const storage = storageBucket();
+    if (!storage) throw new Error("雲端儲存未就緒。");
 
-    const { data, error } = await state.cloud.storage
-      .from("media")
-      .upload(path, file, { upsert: true, onProgress });
+    const path = scopePath(storage, file);
+    const { data, error } = await storage.upload(path, file, {
+      upsert: true,
+      onProgress,
+    });
     if (error) throw new Error(error.message || "上傳失敗");
     return (data && (data.path || data.fullPath)) || path;
   }
 
   async function signedUrl(path, seconds) {
     if (state.mode !== "cloud" || !path) return "";
-    const { data, error } = await state.cloud.storage
-      .from("media")
-      .createSignedUrl(path, seconds || 3600);
+    const storage = storageBucket();
+    if (!storage) return "";
+    const { data, error } = await storage.createSignedUrl(
+      path,
+      seconds || 3600
+    );
     if (error) return "";
     return (data && (data.signedUrl || data.url)) || "";
   }
