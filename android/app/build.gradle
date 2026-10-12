@@ -27,9 +27,30 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/*.kotlin_module', 'META-INF/DEPENDENCIES']
+        }
+    }
 }
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.webkit:webkit:1.11.0'
+}
+
+/*
+  AndroidX 传递依赖里同时拉进了 kotlin-stdlib 1.8.x 与 kotlin-stdlib-jdk8 1.6.x，
+  两者含同名类 kotlin.collections.jdk8.CollectionsJDK8Kt，打包时报 Duplicate class。
+  从 1.8 起 jdk7/jdk8 的内容已并入主 stdlib，直接把这两个旧分片对齐到主版本即可根除。
+*/
+configurations.all {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.jetbrains.kotlin'
+                && (details.requested.name == 'kotlin-stdlib-jdk7'
+                 || details.requested.name == 'kotlin-stdlib-jdk8')) {
+            details.useVersion '1.8.22'
+        }
+    }
 }
