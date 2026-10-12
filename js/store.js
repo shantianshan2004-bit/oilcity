@@ -524,11 +524,25 @@
   }
 
   /* 当前登录用户的存储作用域。SDK 提供了 userPath/sharedPath 两个正规构造器，
-     优先用它们，避免自己拼路径踩到服务端的路径规则。 */
+     优先用它们，避免自己拼路径踩到服务端的路径规则。
+
+     文件名策略：保留中文可读性，但剔除会破坏 URL 的字符（空格、斜杠、问号、
+     井号、百分号、控制字符等）。空格与特殊符号是签名 URL 出错的高发原因，
+     中文本身经过 encodeURI 处理是安全的。时间戳前缀保证唯一，避免同名覆盖。 */
   function scopePath(storage, file) {
-    const safe = String(file.name || "file")
-      .replace(/[^\w.\-\u4e00-\u9fa5]+/g, "_")
-      .slice(-80);
+    const raw = String(file.name || "file");
+    const dot = raw.lastIndexOf(".");
+    const ext = dot > 0 ? raw.slice(dot + 1).toLowerCase() : "";
+    const keepExt = /^[a-z0-9]{1,5}$/.test(ext) ? "." + ext : "";
+
+    /* 保留中日韩文字、字母数字、点、连字符、下划线，其余压成下划线 */
+    let stem = raw
+      .slice(0, dot > 0 ? dot : raw.length)
+      .replace(/[^\w.\-\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 60);
+    if (!stem) stem = "file";
+
     const stamp = Date.now();
     const uid =
       (state.session &&
@@ -536,13 +550,14 @@
         (state.session.user.id || state.session.user.sub)) ||
       null;
 
+    const name = `${stamp}-${stem}${keepExt}`;
     try {
       if (typeof storage.userPath === "function" && uid)
-        return storage.userPath(uid, `${stamp}-${safe}`);
+        return storage.userPath(uid, name);
       if (typeof storage.sharedPath === "function")
-        return storage.sharedPath(uid || "anon", `${stamp}-${safe}`);
+        return storage.sharedPath(uid || "anon", name);
     } catch (_) {}
-    return `${uid ? "users/" + uid : "shared/anon"}/${stamp}-${safe}`;
+    return `${uid ? "users/" + uid : "shared/anon"}/${name}`;
   }
 
   /* 上传/取链路的诊断日志。失败时把每一步都摊开，便于定位是哪一层出的问题。 */
@@ -642,13 +657,33 @@
       logTrace("中止", "storage 模块不可用");
       return "";
     }
-    const res = await storage.createSignedUrl(path, seconds || 3600);
+    if (!isSignedIn()) {
+      logTrace("中止", "未登录——存储桶要求登录令牌，无法取得播放地址");
+      return "";
+    }
+    logTrace("令牌", (state.session.accessToken || "").slice(0, 8) + "…");
+
+    let res;
+    try {
+      res = await withRetry(
+        () => storage.createSignedUrl(path, seconds || 3600),
+        "签名 " + path
+      );
+    } catch (err) {
+      logTrace("请求抛错", (err && err.message) || err);
+      return "";
+    }
     if (res && res.error) {
       logTrace("服务端拒绝", res.error.message || JSON.stringify(res.error));
       return "";
     }
-    const url = (res && res.data && (res.data.signedUrl || res.data.url)) || "";
-    logTrace(url ? "取得链接" : "未返回链接", url ? url.slice(0, 120) + "…" : "data 为空");
+    const data = res && res.data;
+    const url = (data && (data.signedUrl || data.url)) || "";
+    if (!url) {
+      logTrace("未返回链接", "data = " + JSON.stringify(data).slice(0, 160));
+      return "";
+    }
+    logTrace("取得链接", url.slice(0, 140) + "…");
     return url;
   }
 

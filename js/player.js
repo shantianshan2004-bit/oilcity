@@ -58,9 +58,21 @@ window.Player = (function () {
     (async () => {
       let url = src;
       if (!/^https?:/i.test(src)) {
+        if (!Store.isSignedIn()) {
+          note.textContent =
+            '音频需要登录后才能取得播放地址。请先登录，再回到本页。';
+          return;
+        }
         url = await Store.signedUrl(src, 3600);
         if (!url) {
-          note.textContent = "音频链接获取失败，请确认已登录后再试。";
+          /* 把存储层记录的具体原因带出来，不再只说"失败" */
+          const why = (Store.getTrace ? Store.getTrace() : [])
+            .filter((r) => /拒绝|中止|抛错|未返回/.test(r.step))
+            .map((r) => r.step + "：" + r.detail)
+            .join("；");
+          note.textContent = why
+            ? "播放地址获取失败 —— " + why
+            : "音频链接获取失败，请确认已登录后再试。";
           return;
         }
       }
@@ -68,6 +80,19 @@ window.Player = (function () {
 
       audio = new Audio(url);
       audio.preload = "metadata";
+
+      /* 播放失败也要说出原因，不能静默无声 */
+      audio.addEventListener("error", () => {
+        const e = audio.error;
+        const map = {
+          1: "加载被中止。",
+          2: "网络中断，音频未能下载完成。",
+          3: "音频解码失败，文件可能已损坏或格式不受支持。",
+          4: "音频格式不受浏览器支持，或文件地址已失效。",
+        };
+        note.textContent =
+          (e && map[e.code]) || "音频加载失败，请重新上传后再试。";
+      });
 
       const play = root.querySelector("#plPlay");
       const cur = root.querySelector("#plCur");
