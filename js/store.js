@@ -39,6 +39,15 @@
   };
 
   /* ---------- 工具 ---------- */
+  /* SDK 客户端的数据库模块属性是 cloud.database（旧名 cloud.db 兜底） */
+  function dbh() {
+    const c = state.cloud;
+    if (!c) throw new Error("雲端客戶端未建立。");
+    const m = c.database || c.db;
+    if (!m) throw new Error("SDK 客戶端上找不到資料庫模組（database/db 均不存在）。");
+    return m;
+  }
+  state.db = dbh;
   const clone = (v) => JSON.parse(JSON.stringify(v));
 
   function slugify(s) {
@@ -132,7 +141,7 @@
      ============================================================ */
   async function pull() {
     if (state.mode !== "cloud") return;
-    const { data, error } = await state.cloud.db
+    const { data, error } = await state.db()
       .from("contents")
       .select("*")
       .order("created_at", { ascending: true });
@@ -250,7 +259,7 @@
 
     /* 1) 版本快照 */
     if (prev) {
-      await state.cloud.db.from("revisions").insert({
+      await state.db().from("revisions").insert({
         target_slug: slug,
         target_type: prev.type,
         title: prev.title,
@@ -283,7 +292,7 @@
       updated_at: nowISO(),
     };
 
-    const { error } = await state.cloud.db
+    const { error } = await state.db()
       .from("contents")
       .upsert(payload, { onConflict: "slug" });
     if (error) throw new Error(error.message || "儲存失敗");
@@ -295,7 +304,7 @@
   async function remove(slug) {
     if (state.mode !== "cloud") throw new Error("雲端未連接，無法刪除。");
     if (!isSignedIn()) throw new Error("請先登入。");
-    const { error } = await state.cloud.db.from("contents").delete().eq("slug", slug);
+    const { error } = await state.db().from("contents").delete().eq("slug", slug);
     if (error) throw new Error(error.message || "刪除失敗");
     state.contents = state.contents.filter((r) => r.slug !== slug);
   }
@@ -303,7 +312,7 @@
   /* ---------- 版本历史 ---------- */
   async function revisionsOf(slug) {
     if (state.mode !== "cloud") return [];
-    const { data, error } = await state.cloud.db
+    const { data, error } = await state.db()
       .from("revisions")
       .select("*")
       .eq("target_slug", slug)
@@ -316,7 +325,7 @@
   async function restore(revisionId) {
     if (state.mode !== "cloud") throw new Error("雲端未連接。");
     if (!isSignedIn()) throw new Error("請先登入。");
-    const { data, error } = await state.cloud.db
+    const { data, error } = await state.db()
       .from("revisions")
       .select("*")
       .eq("id", revisionId)

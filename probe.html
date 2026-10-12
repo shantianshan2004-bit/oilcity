@@ -40,15 +40,19 @@ try{
   if(!f) throw new Error("SDK 沒有可用的工廠函數");
   const cloud=await f(CFG);
   log("4. createClient      : 成功","ok");
+  log("   客户端属性         : "+Object.keys(cloud).join(", "),"dim");
+  const dbm=cloud.database||cloud.db;
+  log("   数据库模块         : "+(dbm?"cloud."+(cloud.database?"database":"db"):"找不到！"),"dim");
   try{
     const s=await cloud.auth.getSession();
-    log("5. auth.getSession : "+(s?"有会话":"null（未登录，属正常）"),"ok");
-  }catch(e){log("5. auth.getSession : 抛错 — "+(e&&e.message||e),"bad");}
-  try{
-    const r=await cloud.db.from("contents").select("*").limit(1);
-    if(r&&r.error) log("6. db 读取 contents : 拒绝 — "+r.error.message,"bad");
-    else log("6. db 读取 contents : 成功，返回 "+((r&&r.data||[]).length)+" 行","ok");
-  }catch(e){log("6. db 读取 contents : 抛错 — "+(e&&e.message||e),"bad");}
+    log("5. auth.getSession   : "+(s?"有会话":"null（未登录，属正常）"),"ok");
+  }catch(e){log("5. auth.getSession   : 抛错 — "+(e&&e.message||e),"bad");}
+  if(!dbm){log("6. db 读取 contents   : 跳过（无数据库模块）","bad");}
+  else try{
+    const r=await dbm.from("contents").select("*").limit(1);
+    if(r&&r.error) log("6. db 读取 contents   : 拒绝 — "+r.error.message,"bad");
+    else log("6. db 读取 contents   : 成功，返回 "+((r&&r.data||[]).length)+" 行","ok");
+  }catch(e){log("6. db 读取 contents   : 抛错 — "+(e&&e.message||e),"bad");}
 }catch(e){
   log("4. createClient    : 失败 — "+(e&&e.message||e),"bad");
   log("");
