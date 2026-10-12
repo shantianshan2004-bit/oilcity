@@ -406,22 +406,272 @@ window.App = (function () {
   /* ============================================================
      留声机
      ============================================================ */
+
+  /* —— 每一首曲目的投稿入口：音频 / 歌词 / 封面 ——
+     独立于“共创档案”，从留声机页直接可用。
+     尚未连接云端或未登录时，入口保留但明确拒绝，不假装可用。 */
+  function songUploadRow(s, i) {
+    const bits = [];
+    bits.push(s.audio_path ? `<span class="tag">已有音訊</span>` : `<span class="micro">尚無音訊</span>`);
+    if (s.body) bits.push(`<span class="micro">有詞</span>`);
+    return `<li class="song-upload" data-slug="${esc(s.slug)}">
+      <span class="en micro">${en(i + 1)}</span>
+      <span class="song-upload-name">${esc(s.title)}</span>
+      <span class="row" style="gap:var(--space-3)">
+        ${bits.join("")}
+        <button class="btn-ink" data-up="song" data-slug="${esc(s.slug)}"
+                data-kind="audio">上傳音訊</button>
+        <button class="btn-ink" data-up="song" data-slug="${esc(s.slug)}"
+                data-kind="cover">上傳封面</button>
+        <button class="btn-ink" data-up="song" data-slug="${esc(s.slug)}"
+                data-kind="lyric">補寫歌詞</button>
+      </span>
+    </li>`;
+  }
+
   function musicPage() {
     const list = Store.songs();
-    $("#songCount").textContent = en(list.length);
-    $("#songList").innerHTML = list
-      .map(
-        (s, i) => `
-      <a class="song-row" href="song.html?id=${encodeURIComponent(s.slug)}">
-        <span class="song-index en">${en(i + 1)}</span>
-        <span>
-          <span class="song-title" style="display:block">${esc(s.title)}</span>
-          <span class="song-note" style="display:block">${esc(s.summary || "")}</span>
-        </span>
-        <span class="micro en">${s.body ? "詞" : "—"}</span>
-      </a>`
-      )
-      .join("");
+    const count = $("#songCount");
+    if (count) count.textContent = en(list.length);
+
+    /* —— 播放清單 —— */
+    const wrap = $("#songList");
+    if (wrap) {
+      wrap.innerHTML = list
+        .map(
+          (s, i) => `
+        <li class="song-row-item">
+          <a class="song-row" href="song.html?id=${encodeURIComponent(s.slug)}">
+            <span class="song-index en">${en(i + 1)}</span>
+            <span>
+              <span class="song-title" style="display:block">${esc(s.title)}</span>
+              <span class="song-note" style="display:block">${esc(s.summary || "")}</span>
+            </span>
+            <span class="micro en">${s.audio_path ? "有聲" : s.body ? "詞" : "—"}</span>
+          </a>
+        </li>`
+        )
+        .join("");
+    }
+
+    /* —— 上传区 —— */
+    mountSongUpload(list);
+  }
+
+  /* —— 留声机上传：独立面板，直接接共享数据源 —— */
+  function mountSongUpload(list) {
+    const host = $("#songUpload");
+    if (!host) return;
+
+    const online = Store.mode === "cloud";
+    const signed = Store.isSignedIn();
+
+    host.innerHTML = `
+      <div class="status-bar">
+        <span><span class="dot ${online ? "on" : ""}"></span>${
+          online ? "云端数据源已连接" : "云端未连接 · 上传暂不可用"
+        }</span>
+        <span><span class="dot ${signed ? "on" : ""}"></span>${
+          signed ? `已登录 · ${esc(Store.userLabel())}` : "未登录 · 需登录后上传"
+        }</span>
+        <span class="micro">音訊 ≤ 32MB（MP3 / WAV / OGG / M4A）· 封面 ≤ 8MB</span>
+      </div>
+
+      ${
+        online
+          ? ""
+          : `<p class="notice" style="padding:var(--space-2) 0">
+               目前頁面出自非白名單網域，雲端拒絕了請求，因此上傳不可用。
+               改用 <span class="en">oil-city-archives.app.workbuddy.host</span> 訪問即可恢復。
+             </p>`
+      }
+
+      ${
+        signed
+          ? `<ul class="song-upload-list">
+               ${list.map((s, i) => songUploadRow(s, i)).join("")}
+             </ul>`
+          : `<div id="songAuth" style="max-width:30rem;margin:var(--space-3) 0">
+               <div class="field">
+                 <label class="field-label" for="suEmail">Email</label>
+                 <input id="suEmail" type="text" placeholder="you@example.com" autocomplete="email">
+               </div>
+               <div class="row" style="margin-bottom:var(--space-3)">
+                 <button class="btn-ink" id="suSend">寄送驗證碼</button>
+               </div>
+               <div class="field">
+                 <label class="field-label" for="suCode">Code</label>
+                 <input id="suCode" type="text" placeholder="信件裡的驗證碼" inputmode="numeric">
+               </div>
+               <button class="btn-ink" id="suOk">確認登入</button>
+               <p class="notice" id="suMsg" style="margin-top:var(--space-2)"></p>
+             </div>`
+      }
+
+      <input type="file" id="suFile" hidden>
+
+      <ul class="song-upload-list" id="suPending" hidden></ul>
+      <p class="notice" id="suNote" style="padding-top:var(--space-2)"></p>
+    `;
+
+    const note = $("#suNote");
+
+    /* 未登录：就地登录 */
+    if (!signed && online) {
+      const msg = $("#suMsg");
+      $("#suSend").addEventListener("click", async () => {
+        msg.textContent = "正在寄送驗證碼…";
+        try {
+          await Store.sendCode($("#suEmail").value);
+          msg.textContent = "驗證碼已寄出，請查收信件。";
+        } catch (e) {
+          msg.textContent = e.message || "寄送失敗。";
+        }
+      });
+      $("#suOk").addEventListener("click", async () => {
+        msg.textContent = "正在驗證…";
+        try {
+          await Store.verifyCode($("#suEmail").value, $("#suCode").value);
+          mountSongUpload(Store.songs());
+        } catch (e) {
+          msg.textContent = e.message || "驗證失敗。";
+        }
+      });
+    }
+
+    /* 上传：直接绑定到条目并保存 */
+    let pending = null; /* { slug, kind } */
+
+    host.querySelectorAll("[data-up]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (Store.mode !== "cloud") {
+          note.textContent = "雲端未連接，無法上傳。";
+          return;
+        }
+        if (!Store.isSignedIn()) {
+          note.textContent = "請先登入，再上傳。";
+          return;
+        }
+        pending = { slug: btn.dataset.slug, kind: btn.dataset.kind };
+        const fileEl = $("#suFile");
+        if (pending.kind === "audio") {
+          fileEl.accept = "audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/mp4,audio/x-m4a";
+        } else {
+          fileEl.accept = "image/png,image/jpeg,image/webp,image/gif";
+        }
+        fileEl.value = "";
+        fileEl.click();
+      });
+    });
+
+    $("#suFile").addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!pending || !file) return;
+      const { slug, kind } = pending;
+
+      if (kind === "lyric") {
+        showLyricEditor(slug);
+        pending = null;
+        return;
+      }
+
+      const storeKind = kind === "audio" ? "audio" : "image";
+      const bad = Store.validateFile(storeKind, file);
+      if (bad) {
+        note.textContent = bad;
+        return;
+      }
+
+      const target = Store.bySlug(slug);
+      if (!target) {
+        note.textContent = "找不到該條目。";
+        return;
+      }
+
+      note.textContent = "上傳中…";
+      try {
+        const path = await Store.upload(storeKind, file, (pct) => {
+          if (pct != null) note.textContent = `上傳中 ${Math.round(pct)}%`;
+        });
+        await Store.save(
+          {
+            slug,
+            type: target.type,
+            title: target.title,
+            subtitle: target.subtitle,
+            date_label: target.date_label,
+            summary: target.summary,
+            body: target.body,
+            data: target.data,
+            tags: target.tags,
+            cover_path: kind === "cover" ? path : target.cover_path,
+            audio_path: kind === "audio" ? path : target.audio_path,
+          },
+          kind === "audio" ? "更新音訊" : "更新封面"
+        );
+        note.textContent = "已上傳並綁定，所有讀者即時可見。";
+        pending = null;
+        mountSongUpload(Store.songs());
+      } catch (err) {
+        note.textContent = err.message || "上傳失敗。";
+      }
+    });
+
+    /* 补写歌词：行内编辑，写入 body */
+    function showLyricEditor(slug) {
+      const s = Store.bySlug(slug);
+      if (!s) return;
+      const box = $("#suPending");
+      box.hidden = false;
+      box.innerHTML = `<li class="song-upload">
+        <span class="en micro">詞</span>
+        <span class="song-upload-name">${esc(s.title)}</span>
+        <span style="flex:1"></span>
+        <button class="btn-ink" data-cancel="1">取消</button>
+      </li>
+      <li style="padding:var(--space-3) 0">
+        <div class="field">
+          <label class="field-label" for="suLyric">Lyric / 歌詞</label>
+          <textarea id="suLyric" rows="14" style="min-height:16rem"></textarea>
+        </div>
+        <button class="btn-ink" id="suLyricSave">送交歌詞</button>
+        <p class="notice" id="suLyricMsg"></p>
+      </li>`;
+      const ta = $("#suLyric");
+      ta.value = s.body || "";
+      ta.focus();
+
+      box.querySelector("[data-cancel]").addEventListener("click", () => {
+        box.hidden = true;
+        box.innerHTML = "";
+      });
+      $("#suLyricSave").addEventListener("click", async () => {
+        const msg = $("#suLyricMsg");
+        msg.textContent = "正在提交…";
+        try {
+          await Store.save(
+            {
+              slug,
+              type: s.type,
+              title: s.title,
+              subtitle: s.subtitle,
+              date_label: s.date_label,
+              summary: s.summary,
+              body: ta.value,
+              data: s.data,
+              tags: s.tags,
+              cover_path: s.cover_path,
+              audio_path: s.audio_path,
+            },
+            "更新歌詞"
+          );
+          msg.textContent = "已提交，所有讀者即時可見。";
+          setTimeout(() => mountSongUpload(Store.songs()), 900);
+        } catch (err) {
+          msg.textContent = err.message || "提交失敗。";
+        }
+      });
+    }
   }
 
   /* —— 单曲页：可用的播放器 —— */
@@ -501,6 +751,131 @@ window.App = (function () {
         : `<span class="soft micro">最后一首</span>`;
 
     Player.mount(s);
+    mountSongDetailUpload(s);
+  }
+
+  /* —— 单曲页投稿：与留声机首页同一套逻辑，就地可用 —— */
+  function mountSongDetailUpload(s) {
+    const host = $("#songUpload");
+    if (!host) return;
+    const online = Store.mode === "cloud";
+    const signed = Store.isSignedIn();
+
+    host.innerHTML = `
+      <div class="upload-row">
+        <input type="file" id="sdFile" hidden>
+        <button class="btn-ink" id="sdAudio" ${online ? "" : "disabled"}>上傳音訊</button>
+        <button class="btn-ink" id="sdCover" ${online ? "" : "disabled"}>上傳封面</button>
+        <span class="micro">${online ? "登入後即可上傳" : "雲端未連接 · 上傳不可用"}</span>
+      </div>
+      ${
+        signed
+          ? `<p class="micro">已登入 · ${esc(Store.userLabel())}</p>`
+          : `<div id="sdAuth" style="max-width:30rem;margin-top:var(--space-2)">
+               <div class="row" style="gap:var(--space-2);margin-bottom:var(--space-2)">
+                 <input id="sdEmail" type="text" placeholder="you@example.com"
+                        style="border:0;border-bottom:1px solid var(--ink-18);background:transparent;
+                               font-family:var(--serif-cn);color:inherit;padding:0.4rem 0;min-width:14rem">
+                 <button class="btn-ink" id="sdSend">寄送驗證碼</button>
+               </div>
+               <div class="row" style="gap:var(--space-2)">
+                 <input id="sdCode" type="text" placeholder="驗證碼" inputmode="numeric"
+                        style="border:0;border-bottom:1px solid var(--ink-18);background:transparent;
+                               font-family:var(--serif-cn);color:inherit;padding:0.4rem 0;min-width:10rem">
+                 <button class="btn-ink" id="sdOk">確認登入</button>
+               </div>
+               <p class="notice" id="sdMsg" style="margin-top:var(--space-2)"></p>
+             </div>`
+      }
+      <p class="notice" id="sdNote" style="margin-top:var(--space-2)"></p>
+    `;
+
+    const note = $("#sdNote");
+
+    if (!signed) {
+      const msg = $("#sdMsg");
+      const send = $("#sdSend");
+      const ok = $("#sdOk");
+      if (send)
+        send.addEventListener("click", async () => {
+          msg.textContent = "正在寄送…";
+          try {
+            await Store.sendCode($("#sdEmail").value);
+            msg.textContent = "驗證碼已寄出。";
+          } catch (e) {
+            msg.textContent = e.message || "寄送失敗。";
+          }
+        });
+      if (ok)
+        ok.addEventListener("click", async () => {
+          msg.textContent = "正在驗證…";
+          try {
+            await Store.verifyCode($("#sdEmail").value, $("#sdCode").value);
+            mountSongDetailUpload(s);
+          } catch (e) {
+            msg.textContent = e.message || "驗證失敗。";
+          }
+        });
+    }
+
+    let kind = "audio";
+    const fileEl = $("#sdFile");
+    const pick = (k) => {
+      if (Store.mode !== "cloud") return;
+      if (!Store.isSignedIn()) {
+        note.textContent = "請先登入。";
+        return;
+      }
+      kind = k;
+      fileEl.accept =
+        k === "audio"
+          ? "audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/mp4,audio/x-m4a"
+          : "image/png,image/jpeg,image/webp,image/gif";
+      fileEl.value = "";
+      fileEl.click();
+    };
+    const aBtn = $("#sdAudio");
+    const cBtn = $("#sdCover");
+    if (aBtn) aBtn.addEventListener("click", () => pick("audio"));
+    if (cBtn) cBtn.addEventListener("click", () => pick("cover"));
+
+    fileEl.addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const storeKind = kind === "audio" ? "audio" : "image";
+      const bad = Store.validateFile(storeKind, file);
+      if (bad) {
+        note.textContent = bad;
+        return;
+      }
+      note.textContent = "上傳中…";
+      try {
+        const path = await Store.upload(storeKind, file, (pct) => {
+          if (pct != null) note.textContent = `上傳中 ${Math.round(pct)}%`;
+        });
+        const cur = Store.bySlug(s.slug) || s;
+        await Store.save(
+          {
+            slug: cur.slug,
+            type: cur.type,
+            title: cur.title,
+            subtitle: cur.subtitle,
+            date_label: cur.date_label,
+            summary: cur.summary,
+            body: cur.body,
+            data: cur.data,
+            tags: cur.tags,
+            cover_path: kind === "cover" ? path : cur.cover_path,
+            audio_path: kind === "audio" ? path : cur.audio_path,
+          },
+          kind === "audio" ? "更新音訊" : "更新封面"
+        );
+        note.textContent = "已上傳並綁定，重新載入即可播放。";
+        setTimeout(() => location.reload(), 900);
+      } catch (err) {
+        note.textContent = err.message || "上傳失敗。";
+      }
+    });
   }
 
   return {

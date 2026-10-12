@@ -42,6 +42,20 @@
     <section class="shell" style="padding-bottom:var(--space-6)">
       <ul class="song-list" id="songList"></ul>
     </section>
+
+    <!-- ============ 投稿：音频 / 封面 / 歌词 ============ -->
+    <section class="shell" id="musicUpload" style="padding-bottom:var(--space-7)">
+      <div class="section-head reveal">
+        <p class="label">Contribute</p>
+        <h2 class="section-title" style="font-size:1.6rem">投稿到留声机</h2>
+        <div class="rule-ink" aria-hidden="true"></div>
+        <p class="notice">
+          音訊、封面与歌词都从这里提交。登录后可直接上传，
+          保存即同步给所有读者，旧稿自动留档。
+        </p>
+      </div>
+      <div id="songUpload"></div>
+    </section>
   </main>
 
   <footer class="colophon">
@@ -64,6 +78,7 @@
     await Store.init();
     App.mountChrome();
     App.musicPage();
+    InkEngine.initReveal();
   })();
 </script>
 </body>

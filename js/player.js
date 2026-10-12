@@ -45,8 +45,10 @@ window.Player = (function () {
     const note = root.querySelector("#plNote");
 
     if (!src) {
-      note.innerHTML =
-        "尚无音频文件。可在<a class=\"underscore\" href=\"cocreate.html\">共创档案</a>登录后上传音讯，上传完成即可在此播放。";
+      const canUp = Store.mode === "cloud" && Store.isSignedIn();
+      note.innerHTML = canUp
+        ? '尚无音频文件。可在本页右侧「投稿」处直接上传音讯，上传完成即可播放。'
+        : '尚无音频文件。登录后可在本页「投稿」处上传音讯，也可前往<a class="underscore" href="music.html">留声机</a>投稿。';
       root.querySelector("#plPlay").disabled = true;
       root.querySelector("#plPrev").disabled = true;
       root.querySelector("#plNext").disabled = true;

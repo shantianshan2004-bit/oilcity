@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>油城往事 · 云端连线自检</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:ui-monospace,Menlo,Consolas,monospace;background:#EAE8E1;color:#171715;
+     margin:0;padding:2rem;line-height:1.7;font-size:14px}
+h1{font-size:1.1rem;letter-spacing:.2em;font-weight:500}
+#out{white-space:pre-wrap;word-break:break-all}
+.ok{color:#2e7d32}.bad{color:#873D32}.dim{color:#77766F}
+</style></head><body>
+<h1>云端连线自检 · OIL CITY ARCHIVES</h1>
+<div id="out">检测中…</div>
+<script>
+const out=document.getElementById("out");
+const log=(s,cls)=>{out.innerHTML+=`\n<span class="${cls||""}">${s}</span>`};
+out.innerHTML="";
+log("origin          : "+location.origin);
+log("href            : "+location.href);
+log("SDK             : @tencent-ai/workbuddy-cloud-sdk");
+log("");
+const CFG={resourceId:"wbcs_D7mSSSmSnPaodlPlrkZMV3",
+  endpoint:"https://oil-city-archives.app.workbuddy.host",
+  oauthRelayBaseUrl:"https://www.workbuddy.cn/v2/as/genie-baas/oauth",
+  publishableKey:"wbpk_bjjEnYmR3bnbqIkReGnes3_80zIbtLkjorx8eAhy46WDGMRMtaQO6ky"};
+function load(src){return new Promise((res,rej)=>{const s=document.createElement("script");
+  s.src=src;s.async=true;s.onload=res;s.onerror=()=>rej(new Error("script load failed"));
+  document.head.appendChild(s);});}
+(async()=>{
+try{
+  await load("https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js");
+  log("1. SDK 载入        : 成功","ok");
+}catch(e){log("1. SDK 载入        : 失败 — "+e.message,"bad");return;}
+try{
+  log("2. window.WorkBuddyCloud keys : "+Object.keys(window.WorkBuddyCloud||{}).join(", "),"dim");
+  const f=window.WorkBuddyCloud.createClient||window.WorkBuddyCloud;
+  log("3. factory 类型     : "+typeof f,"dim");
+  const cloud=await f(CFG);
+  log("4. createClient    : 成功","ok");
+  try{
+    const s=await cloud.auth.getSession();
+    log("5. auth.getSession : "+(s?"有会话":"null（未登录，属正常）"),"ok");
+  }catch(e){log("5. auth.getSession : 抛错 — "+(e&&e.message||e),"bad");}
+  try{
+    const r=await cloud.db.from("contents").select("*").limit(1);
+    if(r&&r.error) log("6. db 读取 contents : 拒绝 — "+r.error.message,"bad");
+    else log("6. db 读取 contents : 成功，返回 "+((r&&r.data||[]).length)+" 行","ok");
+  }catch(e){log("6. db 读取 contents : 抛错 — "+(e&&e.message||e),"bad");}
+}catch(e){
+  log("4. createClient    : 失败 — "+(e&&e.message||e),"bad");
+  log("");
+  log("→ 若此处失败，即说明云端以 Origin 白名单拒绝了本域名。","bad");
+}
+log("");
+log("自检结束。请把以上全部内容截图发我。");
+})();
+</script></body></html>

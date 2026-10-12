@@ -480,3 +480,54 @@ body[data-page="music"] .song-lyric {
   color: var(--ink-soft);
   line-height: var(--lh-loose);
 }
+
+/* ---------------- 留声机投稿列表 ---------------- */
+.song-row-item { list-style: none; }
+
+.song-upload-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.song-upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-3) 0;
+  font-size: var(--fs-small);
+}
+.song-upload + .song-upload,
+.song-upload-list > * + * { border-top: 1px solid rgba(217, 214, 205, 0.1); }
+.song-upload-name {
+  font-size: var(--fs-body);
+  letter-spacing: 0.1em;
+  min-width: 9rem;
+  color: #EDEAE1;
+}
+
+/* 留声机页的上传按钮沿用暗色 */
+body[data-page="music"] .btn-ink { color: #EDEAE1; }
+body[data-page="music"] .btn-ink::after { background: #EDEAE1; }
+body[data-page="music"] .status-bar { color: #8B877D; }
+body[data-page="music"] .dot { background: #6B6862; }
+body[data-page="music"] .dot.on { background: var(--accent); }
+body[data-page="music"] .notice { color: #8B877D; }
+body[data-page="music"] .rule-ink { background: #EDEAE1; }
+body[data-page="music"] .song-upload { color: #8B877D; }
+body[data-page="music"] .field input[type="text"],
+body[data-page="music"] .field textarea {
+  color: #EDEAE1;
+  border-bottom-color: rgba(217, 214, 205, 0.18);
+}
+body[data-page="music"] .field textarea { border-color: rgba(217, 214, 205, 0.14); }
+body[data-page="music"] .field > .field-label { color: #8B877D; }
+body[data-page="music"] .section-title { color: #EDEAE1; }
+
+/* 单曲页在暗底下的内联输入 */
+body[data-page="music"] #sdEmail,
+body[data-page="music"] #sdCode {
+  border-bottom-color: rgba(217, 214, 205, 0.22) !important;
+  color: #EDEAE1;
+}
+body[data-page="music"] .upload-row input[type="file"] { color: #8B877D; }
