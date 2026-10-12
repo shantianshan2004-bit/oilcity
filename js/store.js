@@ -110,6 +110,9 @@
           : null;
       if (!factory) throw new Error("SDK 形狀不符：找不到工廠函數");
 
+      /* 会话持久化由 SDK 自己负责：默认即使用 localStorage，
+         键名 workbuddy-cloud.session.<publishableKey>。
+         localStorage 不可用（隐私模式等）时才退回内存。 */
       const cloud = await factory({
         resourceId: CFG.resourceId,
         endpoint: CFG.endpoint,
@@ -120,11 +123,10 @@
       state.cloud = cloud;
       state.mode = "cloud";
 
-      try {
-        state.session = (await cloud.auth.getSession()) || null;
-      } catch (_) {
-        state.session = null;
-      }
+      /* 恢复登录态：getSession/peek 读回持久化的会话，
+         必要时 SDK 会自己用 refreshToken 续期。 */
+      await readSession();
+      watchSession();
 
       await pull();
     } catch (err) {
@@ -204,39 +206,118 @@
 
   /* ============================================================
      登录
+     ------------------------------------------------------------
+     SDK 的 auth 方法返回 { data, error }，不是直接抛错；
+     且 SDK 会在初始化后广播 INITIAL_SESSION / SIGNED_IN /
+     TOKEN_REFRESHED / SIGNED_OUT / USER_UPDATED。
+     这里既主动读回会话，也订阅事件，保证刷新后登录态不丢。
      ============================================================ */
+  function applySession(sess) {
+    if (!sess || !sess.accessToken) {
+      state.session = null;
+      return null;
+    }
+    state.session = {
+      accessToken: sess.accessToken,
+      refreshToken: sess.refreshToken,
+      expiresAt: sess.expiresAt,
+      user: sess.user || null,
+    };
+    return state.session;
+  }
+
+  async function readSession() {
+    if (state.mode !== "cloud" || !state.cloud) return null;
+    const auth = state.cloud.auth;
+    try {
+      /* 先看本地持久化的会话（不打网络） */
+      const peeked = auth.sessions && auth.sessions.peek && auth.sessions.peek();
+      if (peeked && peeked.accessToken) {
+        applySession(peeked);
+        return state.session;
+      }
+      /* 再让 SDK 校验/续期 */
+      const res = await auth.getSession();
+      const sess = res && res.data ? res.data : res;
+      if (sess && sess.accessToken) {
+        applySession(sess);
+        return state.session;
+      }
+      applySession(null);
+    } catch (_) {
+      applySession(null);
+    }
+    return state.session;
+  }
+
+  /* 订阅 SDK 的登录态事件：token 续期、退出、会话失效都能实时反映 */
+  function watchSession() {
+    if (state.mode !== "cloud" || !state.cloud) return;
+    const auth = state.cloud.auth;
+    if (!auth || typeof auth.onAuthStateChange !== "function") return;
+    try {
+      auth.onAuthStateChange((event, sess) => {
+        if (event === "SIGNED_OUT") applySession(null);
+        else if (sess && sess.accessToken) applySession(sess);
+        /* 通知界面重绘 */
+        if (state.onAuthChange) state.onAuthChange(event);
+      });
+    } catch (_) {}
+  }
+
   async function sendCode(email) {
     if (state.mode !== "cloud") throw new Error("雲端未連接，無法登入。");
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
       throw new Error("請填寫有效的信箱。");
-    await state.cloud.auth.sendOtp({ email });
+    const res = await state.cloud.auth.sendOtp({ email });
+    if (res && res.error) throw new Error(res.error.message || "驗證碼寄送失敗。");
     return true;
   }
 
   async function verifyCode(email, code) {
     if (state.mode !== "cloud") throw new Error("雲端未連接，無法登入。");
-    const res = await state.cloud.auth.verifyOtp({
-      email,
-      token: String(code || "").trim(),
-    });
-    state.session = (res && res.session) || (await state.cloud.auth.getSession());
+    const token = String(code || "").trim();
+    if (!token) throw new Error("請填寫驗證碼。");
+
+    const auth = state.cloud.auth;
+    let res;
+
+    /* 先嘗試 signInWithOtp → 拿到 verificationId 后 verifyOtp
+       （这是 SDK 推荐的邮箱验证码路径） */
+    if (typeof auth.signInWithOtp === "function") {
+      const otp = await auth.sendOtp({ email });
+      if (!otp || otp.error) throw new Error((otp && otp.error && otp.error.message) || "驗證碼寄送失敗。");
+      const vid = otp.data && otp.data.verificationId;
+      if (!vid) throw new Error("雲端未回傳驗證標識。");
+      res = await auth.verifyOtp({ email, verificationId: vid, token });
+    } else {
+      res = await auth.verifyOtp({ email, token });
+    }
+
+    if (res && res.error) throw new Error(res.error.message || "驗證失敗。");
+    const sess = res && res.data ? res.data : res;
+    applySession(sess);
+    if (!state.session) {
+      await readSession();
+    }
     return state.session;
   }
 
   async function signOut() {
-    if (state.cloud) {
+    if (state.cloud && state.cloud.auth) {
       try {
-        await state.cloud.auth.signOut();
+        const r = await state.cloud.auth.signOut();
+        if (r && r.error) console.warn("[油城往事] 登出返回错误：", r.error.message);
       } catch (_) {}
     }
-    state.session = null;
+    applySession(null);
   }
 
-  const isSignedIn = () => !!(state.session && (state.session.user || state.session.access_token));
+  const isSignedIn = () => !!(state.session && state.session.accessToken);
   const userLabel = () => {
     const u = state.session && state.session.user;
     if (!u) return "";
-    return u.email || u.phone || (u.id ? String(u.id).slice(0, 8) : "已登入");
+    return u.email || u.phone || u.name || (u.id ? String(u.id).slice(0, 8) : "已登入");
   };
 
   /* ============================================================
@@ -409,6 +490,7 @@
     sendCode,
     verifyCode,
     signOut,
+    readSession,
     isSignedIn,
     userLabel,
     save,

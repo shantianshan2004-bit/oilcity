@@ -289,6 +289,23 @@ window.CoCreate = (function () {
     paintStatus();
     renderList();
     wireAuth();
+
+    /* 登录态由 SDK 事件驱动：续期、退出、失效都即时反映到界面 */
+    Store.state.onAuthChange = () => {
+      paintStatus();
+      renderList();
+    };
+
+    /* 页面从后台切回时校验一次会话，避免长时间停留后令牌过期 */
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        Store.readSession().then(() => {
+          paintStatus();
+          renderList();
+        });
+      }
+    });
+
     document.getElementById("ccGateBtn").addEventListener("click", toggleAuth);
     document.getElementById("ccNew").addEventListener("click", newEntry);
     document.getElementById("edClose").addEventListener("click", closeEditor);

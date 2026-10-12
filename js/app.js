@@ -463,6 +463,9 @@ window.App = (function () {
     const host = $("#songUpload");
     if (!host) return;
 
+    /* 登录态变化时重绘上传区（SDK 事件驱动） */
+    Store.state.onAuthChange = () => mountSongUpload(Store.songs());
+
     const online = Store.mode === "cloud";
     const signed = Store.isSignedIn();
 
