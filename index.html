@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>油城往事 · OIL CITY ARCHIVES</title>
+<meta name="description" content="一城风月，一城假象。这里记录故事，也记录那些尚未被写下的结局。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/ink.css">
+<link rel="stylesheet" href="styles/pages.css">
+</head>
+<body data-page="home">
+
+<div class="ink-field" id="inkHero" data-parallax="0.05"></div>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="shell">
+      <a class="brand" href="index.html">
+        油城往事
+        <span class="en">Oil City Archives</span>
+      </a>
+      <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="mainNav">目 錄</button>
+      <nav class="nav" id="mainNav">
+        <a href="chapters.html">故事</a>
+        <a href="characters.html">人物</a>
+        <a href="music.html">留声机</a>
+        <a href="cocreate.html">共创档案</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ================= 首页 · 不对称的墨与纸 ================= -->
+    <section class="hero">
+      <div class="shell hero-grid">
+
+        <div class="hero-copy">
+          <p class="label develop">Oil City Archives · Vol. I</p>
+
+          <h1 class="hero-title develop" data-delay="1">
+            <span class="hero-title-cn">油城<br>往事</span>
+          </h1>
+
+          <div class="hero-lines develop" data-delay="2">
+            <p class="hero-line">一城风月，一城假象。</p>
+            <p class="hero-sub">这里记录故事，也记录那些尚未被写下的结局。</p>
+          </div>
+
+          <div class="hero-entries develop" data-delay="3">
+            <a class="entry-cta" href="chapters.html">
+              <span>进入油城</span><span class="tail" aria-hidden="true"></span>
+            </a>
+            <a class="entry-cta" href="cocreate.html">
+              <span>参与共创</span><span class="tail" aria-hidden="true"></span>
+            </a>
+          </div>
+        </div>
+
+        <div class="hero-meta develop" data-delay="4">
+          <div class="hero-meta-block">
+            <p class="label">Archives</p>
+            <p class="hero-meta-num" id="statChapters">—</p>
+            <p class="micro">章 · 原文</p>
+          </div>
+          <div class="hero-meta-block">
+            <p class="label">Persons</p>
+            <p class="hero-meta-num" id="statCharacters">—</p>
+            <p class="micro">人 · 档案</p>
+          </div>
+          <div class="hero-meta-block">
+            <p class="label">Songs</p>
+            <p class="hero-meta-num" id="statSongs">—</p>
+            <p class="micro">曲 · 留声</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="hero-scroll">
+        <span class="micro">向下 · 故事自墨里显出</span>
+      </div>
+    </section>
+
+    <!-- ================= 四卷 ================= -->
+    <section class="section shell">
+      <div class="section-head reveal">
+        <p class="label">The Four Volumes</p>
+        <h2 class="section-title">油城分了四卷</h2>
+        <div class="rule-ink" aria-hidden="true"></div>
+      </div>
+
+      <ul class="volumes" id="volumeList">
+        <li class="volume reveal">
+          <a href="chapters.html">
+            <p class="idx en">I</p>
+            <h3 class="volume-name">故事</h3>
+            <p class="volume-desc">六个章节，按写作时间排布。原文照录，一个字未改。</p>
+          </a>
+        </li>
+        <li class="volume reveal">
+          <a href="characters.html">
+            <p class="idx en">II</p>
+            <h3 class="volume-name">人物</h3>
+            <p class="volume-desc">丁柏之、周潇齐……七个人的档案，与他们之间那些说不清的关系。</p>
+          </a>
+        </li>
+        <li class="volume reveal">
+          <a href="music.html">
+            <p class="idx en">III</p>
+            <h3 class="volume-name">留声机</h3>
+            <p class="volume-desc">《一城好戏》与《尘光旧梦》。灯昏下来，唱片还在转。</p>
+          </a>
+        </li>
+        <li class="volume reveal">
+          <a href="cocreate.html">
+            <p class="idx en">IV</p>
+            <h3 class="volume-name">共创档案</h3>
+            <p class="volume-desc">每人可写、可改、可留档。旧版本不会丢，署名跟着内容走。</p>
+          </a>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ================= 近期的笔迹 ================= -->
+    <section class="section shell">
+      <div class="section-head reveal">
+        <p class="label">Recent Ink</p>
+        <h2 class="section-title">最近落笔</h2>
+        <div class="rule-ink" aria-hidden="true"></div>
+      </div>
+      <ul class="entry-list" id="recentList"></ul>
+    </section>
+
+  </main>
+
+  <footer class="colophon">
+    <div class="shell">
+      <p>油城往事 · 原文取自《油城往事》，未经改写。</p>
+      <p class="en">Oil City Archives — a co-created literary archive</p>
+      <p class="micro" id="storageNote"></p>
+    </div>
+  </footer>
+
+</div>
+
+<script src="js/seed.js"></script>
+<script src="js/ink-engine.js"></script>
+<script src="js/store.js"></script>
+<script src="js/app.js"></script>
+<script>
+  (async function () {
+    /* 笔触：只在首页这一处渲染最重的一笔墨 */
+    document.getElementById("inkHero").innerHTML = InkEngine.PRESETS.home().svg;
+    InkEngine.initParallax();
+    InkEngine.initReveal();
+
+    await Store.init();
+    App.mountChrome();
+    App.home();
+  })();
+</script>
+</body>
+</html>

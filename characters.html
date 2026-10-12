@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人物 · 油城往事</title>
+<meta name="description" content="丁柏之、周潇齐、蒋淑怡、曹云宁、梁志博、梁旭阳、钟雯棠的人物档案。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/ink.css">
+<link rel="stylesheet" href="styles/pages.css">
+</head>
+<body data-page="characters">
+
+<div class="ink-field" id="inkHead"></div>
+
+<div class="page">
+  <header class="masthead">
+    <div class="shell">
+      <a class="brand" href="index.html">油城往事<span class="en">Oil City Archives</span></a>
+      <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="mainNav">目 錄</button>
+      <nav class="nav" id="mainNav">
+        <a href="chapters.html">故事</a>
+        <a href="characters.html">人物</a>
+        <a href="music.html">留声机</a>
+        <a href="cocreate.html">共创档案</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="section shell" style="padding-top:var(--space-6)">
+      <div class="section-head reveal">
+        <p class="label">Persons · <span id="charCount">—</span> Files</p>
+        <h1 class="section-title" style="font-size:clamp(2.4rem,7vw,4.6rem);letter-spacing:.14em">人物</h1>
+        <div class="rule-ink" aria-hidden="true"></div>
+        <p class="hero-sub" style="max-width:40ch">
+          七个人的档案。关系用线条与墨点表示，不铺成卡片。
+        </p>
+      </div>
+
+      <div class="char-grid" id="charGrid"></div>
+    </section>
+  </main>
+
+  <footer class="colophon">
+    <div class="shell">
+      <p>油城往事 · 人物设定取自原文，可补充。</p>
+      <p class="en">Oil City Archives — a co-created literary archive</p>
+      <p class="micro" id="storageNote"></p>
+    </div>
+  </footer>
+</div>
+
+<script src="js/seed.js"></script>
+<script src="js/ink-engine.js"></script>
+<script src="js/store.js"></script>
+<script src="js/app.js"></script>
+<script>
+  (async function () {
+    document.getElementById("inkHead").innerHTML = InkEngine.PRESETS.characters();
+    await Store.init();
+    App.mountChrome();
+    App.charactersPage();
+  })();
+</script>
+</body>
+</html>

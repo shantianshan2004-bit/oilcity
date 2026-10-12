@@ -1,0 +1,482 @@
+/* ============================================================
+   油城往事 · 页面专属排版
+   ============================================================ */
+
+/* ---------------- 首页 ---------------- */
+.hero {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: var(--space-5);
+}
+
+#inkHero {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.96;
+}
+#inkHero svg { width: 100%; height: 100%; display: block; }
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: end;
+  gap: var(--space-5);
+  position: relative;
+  z-index: 2;
+}
+
+.hero-copy { padding-block: var(--space-6) var(--space-4); }
+
+.hero-title { margin: var(--space-3) 0 var(--space-4); }
+
+.hero-title-cn {
+  display: block;
+  font-size: var(--fs-display);
+  font-weight: 500;
+  line-height: 0.94;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  /* 墨色在纸上的轻微不匀 */
+  text-shadow:
+    0 0 1px rgba(234, 232, 225, 0.8),
+    0.5px 0.5px 0 rgba(23, 23, 21, 0.14);
+}
+
+.hero-lines { max-width: 30ch; }
+.hero-line {
+  font-size: var(--fs-hero);
+  line-height: 1.5;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+}
+.hero-sub {
+  margin-top: var(--space-2);
+  font-size: var(--fs-lead);
+  line-height: var(--lh-loose);
+  color: var(--ink-mid);
+  letter-spacing: 0.04em;
+}
+
+.hero-entries {
+  margin-top: var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.hero-meta {
+  padding-bottom: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+}
+.hero-meta-block { border-left: 0; }
+.hero-meta-num {
+  font-family: var(--serif-en);
+  font-size: clamp(2.2rem, 4.6vw, 3.4rem);
+  line-height: 1;
+  color: var(--ink);
+  margin: 0.3em 0 0.1em;
+}
+.hero-meta-block .micro { letter-spacing: 0.24em; }
+
+.hero-scroll {
+  position: absolute;
+  left: 4vw;
+  bottom: var(--space-4);
+  z-index: 2;
+}
+.hero-scroll .micro { letter-spacing: 0.3em; }
+
+@media (max-width: 900px) {
+  .hero-grid { grid-template-columns: 1fr; align-items: start; }
+  .hero-meta {
+    grid-template-columns: repeat(3, auto);
+    justify-content: start;
+    gap: var(--space-4);
+  }
+  .hero-entries { gap: var(--space-4); }
+}
+
+/* ---------------- 章节 ---------------- */
+.section { padding-block: var(--space-6); position: relative; z-index: 2; }
+.section-head { margin-bottom: var(--space-5); }
+
+.volumes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+}
+.volume {
+  padding: var(--space-5) var(--space-4) var(--space-5) 0;
+  position: relative;
+}
+.volume a { display: block; }
+.volume .idx {
+  font-family: var(--serif-en);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-label);
+  color: var(--ink-soft);
+}
+.volume-name {
+  font-size: clamp(1.8rem, 3.6vw, 2.6rem);
+  letter-spacing: 0.16em;
+  margin: 0.3em 0 0.55em;
+  transition: letter-spacing var(--dur-base) var(--ease-seep);
+}
+.volume a:hover .volume-name { letter-spacing: 0.24em; }
+.volume-desc {
+  font-size: var(--fs-small);
+  line-height: var(--lh-loose);
+  color: var(--ink-mid);
+  max-width: 34ch;
+}
+/* 四卷之间用极淡的墨缝分隔，非边框 */
+.volume:nth-child(odd) { border-right: 1px solid var(--ink-06); }
+.volume:nth-child(n + 3) { border-top: 1px solid var(--ink-06); }
+.volume:nth-child(even) { padding-left: var(--space-4); }
+
+@media (max-width: 720px) {
+  .volumes { grid-template-columns: 1fr; }
+  .volume,
+  .volume:nth-child(odd),
+  .volume:nth-child(even) {
+    border: 0;
+    border-top: 1px solid var(--ink-06);
+    padding: var(--space-4) 0;
+  }
+  .volume:first-child { border-top: 0; }
+}
+
+/* ---------------- 阅读页 ---------------- */
+.reader {
+  padding-block: var(--space-6) var(--space-7);
+  position: relative;
+  z-index: 2;
+}
+.reader-head { margin-bottom: var(--space-6); }
+.reader-title {
+  font-size: clamp(2.4rem, 7vw, 4.6rem);
+  letter-spacing: 0.12em;
+  line-height: 1.06;
+  margin: var(--space-3) 0 var(--space-3);
+}
+.reader-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: baseline;
+}
+
+/* 阅读进度：页顶一条极细的墨线 */
+.progress-rail {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  width: 0;
+  background: var(--accent);
+  opacity: 0.75;
+  z-index: 60;
+  transition: width 120ms linear;
+}
+
+/* 章节切换 */
+.chapter-switch {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border-top: 1px solid var(--ink-06);
+}
+.chapter-switch a { max-width: 42%; }
+.chapter-switch .dir {
+  font-family: var(--serif-en);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-label);
+  color: var(--ink-soft);
+  display: block;
+  margin-bottom: 0.4em;
+}
+.chapter-switch .t { font-size: var(--fs-lead); letter-spacing: 0.1em; }
+
+/* 目录侧栏 */
+.reader-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15rem;
+  gap: var(--space-6);
+  align-items: start;
+}
+.toc { position: sticky; top: 5.5rem; }
+.toc-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; }
+.toc-list li { padding: 0.42rem 0; }
+.toc-list a {
+  font-size: var(--fs-small);
+  color: var(--ink-mid);
+  letter-spacing: 0.08em;
+  display: flex;
+  gap: 0.7em;
+  align-items: baseline;
+  transition: color var(--dur-base) var(--ease-seep);
+}
+.toc-list a:hover { color: var(--ink); }
+.toc-list a[aria-current="page"] { color: var(--ink); }
+.toc-list .n {
+  font-family: var(--serif-en);
+  font-size: var(--fs-micro);
+  color: var(--ink-soft);
+}
+@media (max-width: 900px) {
+  .reader-layout { grid-template-columns: 1fr; }
+  .toc { position: static; margin-bottom: var(--space-5); }
+  .toc-list { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+}
+
+/* ---------------- 人物 ---------------- */
+.char-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  gap: 0;
+}
+.char-card {
+  display: block;
+  padding: var(--space-5) var(--space-4) var(--space-5) 0;
+  position: relative;
+  transition: transform var(--dur-base) var(--ease-seep);
+}
+.char-card:hover { transform: translateY(-4px); }
+.char-name {
+  font-size: clamp(1.7rem, 3.4vw, 2.4rem);
+  letter-spacing: 0.18em;
+  margin: 0.25em 0 0.4em;
+}
+.char-role {
+  font-size: var(--fs-small);
+  color: var(--ink-mid);
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-2);
+}
+.char-desc {
+  font-size: var(--fs-small);
+  line-height: var(--lh-loose);
+  color: var(--ink-mid);
+  max-width: 32ch;
+}
+.char-traits { margin-top: var(--space-3); }
+
+/* 人物详情 */
+.char-profile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+  gap: var(--space-6);
+  align-items: start;
+}
+.char-block { margin-bottom: var(--space-5); }
+.char-block h3 {
+  font-size: var(--fs-lead);
+  letter-spacing: 0.2em;
+  margin-bottom: var(--space-3);
+}
+.trait-row { display: flex; flex-wrap: wrap; gap: var(--space-3) 0; }
+.char-body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-loose);
+  color: rgba(23, 23, 21, 0.9);
+}
+@media (max-width: 900px) {
+  .char-profile { grid-template-columns: 1fr; }
+}
+
+/* ---------------- 留声机（最暗的一页） ---------------- */
+body[data-page="music"] {
+  background: #1B1A18;
+  color: #D9D6CD;
+}
+body[data-page="music"]::before { opacity: 0.32; }
+body[data-page="music"]::after {
+  background:
+    radial-gradient(60% 46% at 20% 10%, rgba(0,0,0,0.5), transparent 72%),
+    radial-gradient(54% 42% at 86% 90%, rgba(0,0,0,0.42), transparent 74%);
+}
+body[data-page="music"] .masthead {
+  background: linear-gradient(to bottom, rgba(27,26,24,0.95), rgba(27,26,24,0)) ;
+}
+body[data-page="music"] .brand,
+body[data-page="music"] .nav a { color: #B7B3A9; }
+body[data-page="music"] .nav a:hover,
+body[data-page="music"] .brand { color: #EDEAE1; }
+body[data-page="music"] .title-lg { color: #EDEAE1; }
+body[data-page="music"] .label,
+body[data-page="music"] .micro,
+body[data-page="music"] .muted { color: #8B877D; }
+body[data-page="music"] .soft { color: #6B6862; }
+
+body[data-page="music"] .entry-cta { color: #EDEAE1; }
+body[data-page="music"] .entry-cta .tail { background: #EDEAE1; }
+body[data-page="music"] .entry + .entry { border-top-color: rgba(217,214,205,0.1); }
+body[data-page="music"] .ink-search::after { background: rgba(217,214,205,0.26); }
+body[data-page="music"] .ink-search input { color: #EDEAE1; }
+body[data-page="music"] .ink-search input::placeholder { color: #6B6862; }
+body[data-page="music"] .volume:nth-child(odd) { border-right-color: rgba(217,214,205,0.08); }
+body[data-page="music"] .volume:nth-child(n+3) { border-top-color: rgba(217,214,205,0.08); }
+
+body[data-page="music"] .player button { color: #EDEAE1; }
+body[data-page="music"] .player .bar .track { background: rgba(217,214,205,0.18); }
+body[data-page="music"] .player .bar .fill { background: #EDEAE1; }
+body[data-page="music"] .player .bar .knob { background: #EDEAE1; }
+body[data-page="music"] .player .time { color: #8B877D; }
+
+body[data-page="music"] .song-lyric {
+  color: rgba(217, 214, 205, 0.82);
+}
+
+#inkMusic {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.9;
+}
+#inkMusic svg { width: 100%; height: 100%; display: block; }
+
+.music-hero {
+  position: relative;
+  z-index: 2;
+  min-height: 78svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: var(--space-5);
+}
+.title-lg {
+  font-size: var(--fs-display);
+  line-height: 0.98;
+  letter-spacing: 0.12em;
+  margin: var(--space-3) 0;
+}
+
+.song-list { list-style: none; margin: 0; padding: 0; position: relative; z-index: 2; }
+.song-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: baseline;
+  padding: var(--space-5) 0;
+  transition: transform var(--dur-base) var(--ease-seep);
+}
+.song-row + .song-row { border-top: 1px solid rgba(217,214,205,0.1); }
+.song-row:hover { transform: translateX(6px); }
+.song-index {
+  font-family: var(--serif-en);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-label);
+  color: #6B6862;
+}
+.song-title {
+  font-size: clamp(1.8rem, 4.6vw, 3rem);
+  letter-spacing: 0.14em;
+  margin-bottom: 0.3em;
+}
+.song-note {
+  font-size: var(--fs-small);
+  line-height: var(--lh-loose);
+  color: #8B877D;
+  max-width: 42ch;
+}
+
+/* 歌词 */
+.song-lyric {
+  font-size: var(--fs-body);
+  line-height: 2.1;
+  white-space: pre-wrap;
+  letter-spacing: 0.04em;
+  color: rgba(23, 23, 21, 0.9);
+}
+.lyric-section { margin-bottom: var(--space-4); }
+.lyric-head {
+  font-family: var(--serif-en);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-label);
+  color: var(--ink-mid);
+  margin-bottom: var(--space-2);
+}
+
+/* ---------------- 共创 ---------------- */
+.cocreate-hero {
+  position: relative;
+  z-index: 2;
+  padding: var(--space-6) 0 var(--space-5);
+}
+#inkCoCreate {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.9;
+}
+#inkCoCreate svg { width: 100%; height: 100%; display: block; }
+
+.status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: baseline;
+  padding: var(--space-3) 0;
+  font-size: var(--fs-small);
+  color: var(--ink-mid);
+  position: relative;
+  z-index: 2;
+}
+.dot {
+  display: inline-block;
+  width: 5px; height: 5px;
+  margin-right: 0.6em;
+  vertical-align: middle;
+  background: var(--ink-mid);
+}
+.dot.on { background: var(--accent); }
+
+/* 编辑面板 */
+.editor-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--paper);
+  overflow-y: auto;
+  display: none;
+}
+.editor-panel.is-open { display: block; }
+.editor-inner {
+  width: min(94vw, 56rem);
+  margin-inline: auto;
+  padding: var(--space-5) 0 var(--space-7);
+}
+.editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+.editor-actions { display: flex; gap: var(--space-4); align-items: baseline; }
+
+.upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-3) 0;
+}
+.upload-row input[type="file"] { font-size: var(--fs-small); font-family: var(--serif-en); }
+
+.empty-note {
+  padding: var(--space-5) 0;
+  font-size: var(--fs-small);
+  color: var(--ink-soft);
+  line-height: var(--lh-loose);
+}

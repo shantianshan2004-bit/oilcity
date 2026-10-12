@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>共创档案 · 油城往事</title>
+<meta name="description" content="所有读者都能参与。新增章节、补充人物、投稿音乐，修改留档可还原。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/ink.css">
+<link rel="stylesheet" href="styles/pages.css">
+</head>
+<body data-page="cocreate">
+
+<div class="ink-field" id="inkCoCreate"></div>
+
+<div class="page">
+  <header class="masthead">
+    <div class="shell">
+      <a class="brand" href="index.html">油城往事<span class="en">Oil City Archives</span></a>
+      <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="mainNav">目 錄</button>
+      <nav class="nav" id="mainNav">
+        <a href="chapters.html">故事</a>
+        <a href="characters.html">人物</a>
+        <a href="music.html">留声机</a>
+        <a href="cocreate.html">共创档案</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="cocreate-hero shell">
+      <p class="label develop">Co-creation Archive</p>
+      <h1 class="reader-title develop" data-delay="1">共创档案</h1>
+      <p class="hero-sub develop" data-delay="2" style="max-width:44ch">
+        阅读一向公开；写需要登录。每一次提交都会留下版本，
+        旧稿不会消失，署名跟着内容走。
+      </p>
+    </section>
+
+    <section class="shell">
+      <div class="status-bar" id="ccStatus"></div>
+
+      <div class="row" style="gap:var(--space-5);margin:var(--space-4) 0">
+        <button class="btn-ink" id="ccNew">新增条目</button>
+        <button class="btn-ink" id="ccGateBtn">登录后可编辑</button>
+      </div>
+
+      <div id="authPanel" hidden style="max-width:30rem;margin-bottom:var(--space-5)">
+        <div class="field">
+          <label class="field-label" for="authEmail">Email</label>
+          <input id="authEmail" type="text" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="row" style="margin-bottom:var(--space-3)">
+          <button class="btn-ink" id="authSend">寄送验证码</button>
+        </div>
+        <div class="field">
+          <label class="field-label" for="authCode">Code</label>
+          <input id="authCode" type="text" placeholder="邮件里的六位数字" inputmode="numeric">
+        </div>
+        <button class="btn-ink" id="authOk">确认登录</button>
+        <p class="notice" id="authMsg" style="margin-top:var(--space-2)"></p>
+      </div>
+
+      <div class="section-head reveal" style="margin-top:var(--space-5)">
+        <p class="label">All Entries</p>
+        <h2 class="section-title" style="font-size:1.6rem">全部条目</h2>
+        <div class="rule-ink" aria-hidden="true"></div>
+      </div>
+      <ul id="ccList" style="list-style:none;margin:0;padding:0"></ul>
+
+      <div class="section-head reveal" style="margin-top:var(--space-6)">
+        <p class="label">Recent Updates</p>
+        <h2 class="section-title" style="font-size:1.6rem">最近更新</h2>
+        <div class="rule-ink" aria-hidden="true"></div>
+        <p class="notice">
+          版式与写入逻辑已就绪。云端连接建立后，这里的每一次保存都会
+          即时同步给所有读者，并自动留存历史版本。
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="colophon">
+    <div class="shell">
+      <p>油城往事 · 所有新增与修改都通过共享数据源保存。</p>
+      <p class="en">Oil City Archives — a co-created literary archive</p>
+      <p class="micro" id="storageNote"></p>
+    </div>
+  </footer>
+</div>
+
+<!-- ============ 编辑器（与阅读态完全分开的一层） ============ -->
+<section class="editor-panel" id="editorPanel" aria-label="编辑条目">
+  <div class="editor-inner">
+    <div class="editor-head">
+      <div>
+        <p class="label">Editing</p>
+        <h2 class="section-title" style="font-size:1.5rem">编辑条目</h2>
+      </div>
+      <div class="editor-actions">
+        <button class="btn-ink" id="edSave">提交修改</button>
+        <button class="btn-ink" id="edClose">关闭</button>
+      </div>
+    </div>
+
+    <div class="editor">
+      <div class="field">
+        <label class="field-label" for="edType">Type</label>
+        <select id="edType">
+          <option value="chapter">章節</option>
+          <option value="character">人物</option>
+          <option value="song">樂曲</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="edSlug">Slug（留空則依標題生成）</label>
+        <input id="edSlug" type="text" placeholder="chap-新章節">
+      </div>
+      <div class="field">
+        <label class="field-label" for="edTitle">Title</label>
+        <input id="edTitle" type="text" placeholder="標題">
+      </div>
+      <div class="field">
+        <label class="field-label" for="edSub">Subtitle</label>
+        <input id="edSub" type="text" placeholder="副標題 · 身分等">
+      </div>
+      <div class="field">
+        <label class="field-label" for="edSummary">Summary</label>
+        <textarea id="edSummary" rows="3" style="min-height:5rem" placeholder="一兩句摘要"></textarea>
+      </div>
+      <div class="field">
+        <label class="field-label" for="edBody">Body / 正文</label>
+        <textarea id="edBody" placeholder="原文或新寫的文字"></textarea>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Upload</label>
+        <div class="upload-row">
+          <input type="file" id="upImage" accept="image/png,image/jpeg,image/webp,image/gif">
+          <span class="micro">封面 · 圖片 ≤ 8MB</span>
+        </div>
+        <div class="upload-row">
+          <input type="file" id="upAudio" accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4">
+          <span class="micro">音訊 · ≤ 32MB</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Version History</label>
+        <div id="edFiles"></div>
+      </div>
+
+      <p class="notice" id="edMsg"></p>
+    </div>
+  </div>
+</section>
+
+<script src="js/seed.js"></script>
+<script src="js/ink-engine.js"></script>
+<script src="js/store.js"></script>
+<script src="js/app.js"></script>
+<script src="js/cocreate.js"></script>
+<script>
+  (async function () {
+    document.getElementById("inkCoCreate").innerHTML = InkEngine.PRESETS.coCreate();
+    InkEngine.initReveal();
+    await Store.init();
+    App.mountChrome();
+    CoCreate.init();
+  })();
+</script>
+</body>
+</html>
