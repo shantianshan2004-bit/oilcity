@@ -564,13 +564,15 @@
       null;
 
     const name = `${stamp}-${stem}${keepExt}`;
+
+    /* 一律走 shared 共享作用域：站内音频/封面是给所有读者听的，
+       users/<uid>/… 是用户私有作用域，别的账号取签名链接会得到
+       STORAGE_OBJECT_NOT_FOUND（服务器不区分"不存在"与"无权访问"）。 */
     try {
-      if (typeof storage.userPath === "function" && uid)
-        return storage.userPath(uid, name);
       if (typeof storage.sharedPath === "function")
         return storage.sharedPath(uid || "anon", name);
     } catch (_) {}
-    return `${uid ? "users/" + uid : "shared/anon"}/${name}`;
+    return `shared/${uid || "anon"}/${name}`;
   }
 
   /* 上传/取链路的诊断日志。失败时把每一步都摊开，便于定位是哪一层出的问题。 */
@@ -654,6 +656,26 @@
 
     const savedPath = (res && res.data && (res.data.path || res.data.fullPath)) || path;
     logTrace("上传成功", savedPath);
+
+    /* 上传后立即验证：签名能取到、对象真实可访问，才算成功。
+       防止"返回成功但对象没落在预期路径"的假成功。 */
+    try {
+      const check = await storage.createSignedUrl(savedPath, 60);
+      if (check && check.error) {
+        logTrace("上传后验证失败", check.error.message || JSON.stringify(check.error));
+        throw new Error(
+          "上传返回成功但云端随即找不到该文件（" +
+            ((check.error && check.error.message) || "对象缺失") +
+            "）。请重新上传一次；若反复出现请把页面上的诊断清单截图反馈。"
+        );
+      }
+      logTrace("上传后验证通过", "对象可访问");
+    } catch (e) {
+      if (/重新上传|假成功|诊断清单/.test(e.message || "")) throw e;
+      /* 验证请求本身的网络错误不阻断成功结果 */
+      logTrace("验证请求异常（不阻断）", (e && e.message) || e);
+    }
+
     return savedPath;
   }
 

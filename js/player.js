@@ -70,9 +70,10 @@ window.Player = (function () {
             .filter((r) => /拒绝|中止|抛错|未返回/.test(r.step))
             .map((r) => r.step + "：" + r.detail)
             .join("；");
-          note.textContent = why
-            ? "播放地址获取失败 —— " + why
-            : "音频链接获取失败，请确认已登录后再试。";
+          const notFound = /not.?found/i.test(why);
+          note.textContent = notFound
+            ? "云端找不到这个音频文件 —— 多半是早期按「用户私有路径」上传的，只有上传者本人能听。请在本页重新上传一次（新上传走共享区，所有读者都能播放）。"
+            : "播放地址获取失败" + (why ? " —— " + why : "") + "。请确认已登录后再试。";
           return;
         }
       }
@@ -92,6 +93,12 @@ window.Player = (function () {
         };
         note.textContent =
           (e && map[e.code]) || "音频加载失败，请重新上传后再试。";
+      });
+
+      /* 签名请求成功但拿到的链接指向缺失对象时，Audio 也会报错；
+         这里对"对象缺失"补一条明确指引（多见于旧版按用户私有路径上传的音频）。 */
+      audio.addEventListener("stalled", () => {
+        note.textContent = "音频加载缓慢或停滞，请稍候…";
       });
 
       const play = root.querySelector("#plPlay");
