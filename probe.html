@@ -45,7 +45,9 @@ try{
   log("   数据库模块         : "+(dbm?"cloud."+(cloud.database?"database":"db"):"找不到！"),"dim");
   try{
     const s=await cloud.auth.getSession();
-    log("5. auth.getSession   : "+(s?"有会话":"null（未登录，属正常）"),"ok");
+    /* SDK 返回 {data,error} 包装对象，本身永真——必须看 data */
+    const sess=s&&s.data;
+    log("5. auth.getSession   : "+(sess?("有会话 — "+(sess.user&&(sess.user.email||sess.user.id)||sess.accessToken.slice(0,8))):"未登录（data 为 null，属正常）"), sess?"ok":"dim");
   }catch(e){log("5. auth.getSession   : 抛错 — "+(e&&e.message||e),"bad");}
   if(!dbm){log("6. db 读取 contents   : 跳过（无数据库模块）","bad");}
   else try{
