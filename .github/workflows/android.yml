@@ -22,10 +22,37 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # ubuntu-latest 镜像自带 Android SDK，直接用，不再调 setup-android
+      # （该 action 会去装已被移除的 'tools' 包而报 exit code 1）
+      - name: Locate Android SDK
+        run: |
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "SDK 路径: $SDK"
+          ls "$SDK" | head -20
+          echo "已装平台:"
+          ls "$SDK/platforms" 2>/dev/null || echo "  (无 platforms 目录)"
+          echo "已装构建工具:"
+          ls "$SDK/build-tools" 2>/dev/null || echo "  (无 build-tools 目录)"
 
-      - name: Gradle wrapper
+      - name: Ensure SDK components
+        run: |
+          SDK="$ANDROID_HOME"
+          # 找一个可用的 sdkmanager
+          SM=""
+          for p in "$SDK"/cmdline-tools/*/bin/sdkmanager "$SDK"/cmdline-tools/latest/bin/sdkmanager "$SDK"/tools/bin/sdkmanager; do
+            if [ -x "$p" ]; then SM="$p"; break; fi
+          done
+          if [ -z "$SM" ]; then
+            echo "未找到 sdkmanager，改用镜像自带组件"
+            exit 0
+          fi
+          echo "使用 $SM"
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+          "$SM" "platforms;android-34" "build-tools;34.0.0" 2>&1 | tail -5 || true
+
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
