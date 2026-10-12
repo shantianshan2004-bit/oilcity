@@ -137,6 +137,43 @@ try{
     log("17. 带令牌访问存储    : 跳过（当前未登录）","dim");
     log("→ 请先在上方完成登录，再刷新本页复核此项。","bad");
   }
+
+  /* ---- 18. 播放地址实测：直接对已上传的音频取签名链接 ---- */
+  log("");
+  log("——— 播放地址（签名链接）实测 ———","dim");
+  try{
+    const r=await cloud.database.from("contents")
+      .select("slug,title,audio_path")
+      .order("updated_at",{ascending:false})
+      .limit(50);
+    const rows=((r&&r.data)||[]).filter(x=>x&&x.audio_path);
+    if(!rows.length){
+      log("18. 已绑定音频的条目  : 0 条（尚未上传过音频）","dim");
+    }else{
+      log("18. 已绑定音频的条目  : "+rows.length+" 条","ok");
+      rows.slice(0,3).forEach(x=>log("     · "+x.title+" → "+x.audio_path,"dim"));
+      if(peeked&&peeked.accessToken){
+        const one=rows[0];
+        try{
+          const sg=await bucket.createSignedUrl(one.audio_path,3600);
+          if(sg&&sg.error) log("19. 取签名链接        : 被拒 — "+sg.error.message,"bad");
+          else if(sg&&sg.data&&(sg.data.signedUrl||sg.data.url)){
+            const u=sg.data.signedUrl||sg.data.url;
+            log("19. 取签名链接        : 成功","ok");
+            log("     "+u.slice(0,150),"dim");
+          }else{
+            log("19. 取签名链接        : 未返回链接，data = "+JSON.stringify(sg&&sg.data).slice(0,120),"bad");
+          }
+        }catch(e){
+          log("19. 取签名链接        : 抛错 — "+(e&&e.message||e),"bad");
+        }
+      }else{
+        log("19. 取签名链接        : 跳过（未登录时存储不可访问）","dim");
+      }
+    }
+  }catch(e){
+    log("18. 已绑定音频的条目  : 查询抛错 — "+(e&&e.message||e),"bad");
+  }
 }catch(e){
   log("4. createClient    : 失败 — "+(e&&e.message||e),"bad");
   log("");
