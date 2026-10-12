@@ -143,10 +143,12 @@
      ============================================================ */
   async function pull() {
     if (state.mode !== "cloud") return;
-    const { data, error } = await state.db()
-      .from("contents")
-      .select("*")
-      .order("created_at", { ascending: true });
+    const res = await withRetry(
+      () => state.db().from("contents").select("*").order("created_at", { ascending: true }),
+      "拉取 contents"
+    );
+    const error = res && res.error;
+    const data = res && res.data;
 
     if (error) throw new Error(error.message || "讀取失敗");
     if (!Array.isArray(data)) return;
@@ -230,13 +232,25 @@
      邮箱等信息来自 auth.getUser()。这一步只补一次，失败不影响登录。 */
   async function hydrateUser() {
     if (!state.cloud || !state.session) return;
+    const u = state.session.user;
+
+    /* 先看会话自带的 raw 载荷（JWT payload 里常直接带 email/phone），
+       不用打网络就能把身份名补齐。 */
+    if (u && !(u.email || u.phone) && u.raw) {
+      const r = u.raw;
+      const mail = typeof r.email === "string" ? r.email : "";
+      const phone = typeof r.phone === "string" ? r.phone : "";
+      if (mail || phone) state.session.user = Object.assign({}, u, { email: mail, phone });
+    }
+
+    /* 再向服务端取一次完整用户资料（失败不影响登录） */
     const auth = state.cloud.auth;
     if (typeof auth.getUser !== "function") return;
     try {
       const res = await auth.getUser();
-      const u = res && res.data ? res.data : null;
-      if (u && (u.email || u.phone)) {
-        state.session.user = Object.assign({}, state.session.user, u);
+      const gu = res && res.data ? res.data : null;
+      if (gu && (gu.email || gu.phone)) {
+        state.session.user = Object.assign({}, state.session.user, gu);
       }
     } catch (_) {}
   }
@@ -385,21 +399,25 @@
 
     /* 1) 版本快照 */
     if (prev) {
-      await state.db().from("revisions").insert({
-        target_slug: slug,
-        target_type: prev.type,
-        title: prev.title,
-        note: note || "內容修改",
-        snapshot: {
-          title: prev.title,
-          subtitle: prev.subtitle || null,
-          date_label: prev.date_label || null,
-          summary: prev.summary || "",
-          body: prev.body || "",
-          data: prev.data || {},
-        },
-        editor_name: userLabel(),
-      });
+      await withRetry(
+        () =>
+          state.db().from("revisions").insert({
+            target_slug: slug,
+            target_type: prev.type,
+            title: prev.title,
+            note: note || "內容修改",
+            snapshot: {
+              title: prev.title,
+              subtitle: prev.subtitle || null,
+              date_label: prev.date_label || null,
+              summary: prev.summary || "",
+              body: prev.body || "",
+              data: prev.data || {},
+            },
+            editor_name: userLabel(),
+          }),
+        "写入版本快照"
+      );
     }
 
     /* 2) 主表 upsert */
@@ -418,10 +436,11 @@
       updated_at: nowISO(),
     };
 
-    const { error } = await state.db()
-      .from("contents")
-      .upsert(payload, { onConflict: "slug" });
-    if (error) throw new Error(error.message || "儲存失敗");
+    const res = await withRetry(
+      () => state.db().from("contents").upsert(payload, { onConflict: "slug" }),
+      "保存 " + slug
+    );
+    if (res && res.error) throw new Error(res.error.message || "儲存失敗");
 
     await pull();
     return bySlug(slug);
@@ -438,13 +457,19 @@
   /* ---------- 版本历史 ---------- */
   async function revisionsOf(slug) {
     if (state.mode !== "cloud") return [];
-    const { data, error } = await state.db()
-      .from("revisions")
-      .select("*")
-      .eq("target_slug", slug)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) return [];
+    const res = await withRetry(
+      () =>
+        state
+          .db()
+          .from("revisions")
+          .select("*")
+          .eq("target_slug", slug)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      "读取版本历史"
+    );
+    if (res && res.error) return [];
+    const data = res && res.data;
     return Array.isArray(data) ? data : [];
   }
 
@@ -573,14 +598,19 @@
 
     let res;
     try {
-      res = await storage.upload(path, file, {
-        upsert: true,
-        onProgress: (pct) => {
-          logTrace("传输中", pct == null ? "…" : Math.round(pct) + "%");
-          if (onProgress) onProgress(pct);
-        },
-      });
+      res = await withRetry(
+        () =>
+          storage.upload(path, file, {
+            upsert: true,
+            onProgress: (pct) => {
+              logTrace("传输中", pct == null ? "…" : Math.round(pct) + "%");
+              if (onProgress) onProgress(pct);
+            },
+          }),
+        "上传 " + file.name
+      );
     } catch (err) {
+      if (/网络请求被中断/.test(err.message)) throw err;
       logTrace("请求抛错", (err && err.message) || err);
       throw new Error("上傳請求異常：" + ((err && err.message) || err));
     }
@@ -624,6 +654,34 @@
 
   function getTrace() {
     return trace.slice();
+  }
+
+  /* ---------- 网络层容错 ----------
+     「Failed to fetch」是浏览器 TypeError（请求没到达服务器），常见于瞬时断网、
+     请求被中断。对这类错误自动重试一次；仍失败则翻成可读的中文提示。 */
+  function isNetworkError(err) {
+    const m = (err && (err.message || String(err))) || "";
+    return /failed to fetch|networkerror|network error|load failed|internet/i.test(m);
+  }
+
+  function networkHint() {
+    return "网络请求被中断（请求未到达服务器）。可能是网络瞬断或信号弱——已自动重试仍失败，请稍候再试一次；若反复出现，请换网络后重试。";
+  }
+
+  async function withRetry(task, label) {
+    try {
+      return await task();
+    } catch (err) {
+      if (!isNetworkError(err)) throw err;
+      logTrace("网络中断，自动重试", label);
+      await new Promise((r) => setTimeout(r, 900));
+      try {
+        return await task();
+      } catch (err2) {
+        logTrace("重试仍失败", (err2 && err2.message) || err2);
+        throw new Error(networkHint());
+      }
+    }
   }
 
   /* ============================================================

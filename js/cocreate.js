@@ -18,6 +18,16 @@ window.CoCreate = (function () {
 
   let editing = null; /* 当前编辑的条目 */
 
+  /* 网络层错误翻译成可操作的中文，避免只显示英文 TypeError */
+  function friendly(e) {
+    const m = (e && e.message) || String(e || "");
+    if (/failed to fetch|networkerror|network error|load failed/i.test(m))
+      return "网络请求被中断（请求未到达服务器）。可能是网络瞬断——系统已自动重试仍失败，请稍候再试；若反复出现请更换网络。";
+    if (/credential|401|unauthenticated/i.test(m))
+      return "登录已失效，请重新登录后再操作。";
+    return m || "操作失败，请重试。";
+  }
+
   /* ---------- 状态条 ---------- */
   function paintStatus() {
     const el = document.getElementById("ccStatus");
@@ -70,7 +80,7 @@ window.CoCreate = (function () {
         msg.textContent = "验证码已寄出，请查收信箱。";
         codeEl.focus();
       } catch (e) {
-        msg.textContent = e.message || "寄送失败。";
+        msg.textContent = friendly(e);
       }
     });
 
@@ -83,7 +93,7 @@ window.CoCreate = (function () {
         paintStatus();
         renderList();
       } catch (e) {
-        msg.textContent = e.message || "验证失败。";
+        msg.textContent = friendly(e);
       }
     });
   }
@@ -186,7 +196,7 @@ window.CoCreate = (function () {
       paintStatus();
       renderList();
     } catch (e) {
-      msg.textContent = e.message || "保存失败。";
+      msg.textContent = friendly(e);
     }
   }
 
@@ -226,7 +236,7 @@ window.CoCreate = (function () {
       );
       msg.textContent = "已上传并绑定。";
     } catch (e) {
-      msg.textContent = e.message || "上传失败。";
+      msg.textContent = friendly(e);
     }
   }
 
@@ -273,7 +283,7 @@ window.CoCreate = (function () {
           alert("已还原。");
           openHistory(slug);
         } catch (e) {
-          alert(e.message || "还原失败。");
+          alert(friendly(e));
         }
       })
     );
