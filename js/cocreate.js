@@ -103,6 +103,7 @@ window.CoCreate = (function () {
     const wrap = document.getElementById("ccList");
     if (!wrap) return;
     const all = Store.state.contents.slice();
+    const signed = Store.isSignedIn();
     wrap.innerHTML = all
       .map((r) => {
         const typeLabel = { chapter: "章节", character: "人物", song: "乐曲" }[r.type] || r.type;
@@ -114,6 +115,12 @@ window.CoCreate = (function () {
           </span>
           <span class="micro">${r.updated_at ? esc(Store.fmtTime(r.updated_at)) : ""}</span>
           <button class="btn-ink" data-hist="${esc(r.slug)}">版本</button>
+          ${
+            signed
+              ? `<button class="btn-ink" data-del="${esc(r.slug)}"
+                   title="删除该条目">删除</button>`
+              : ""
+          }
         </li>`;
       })
       .join("");
@@ -127,6 +134,85 @@ window.CoCreate = (function () {
     wrap.querySelectorAll("[data-hist]").forEach((b) =>
       b.addEventListener("click", () => openHistory(b.dataset.hist))
     );
+    wrap.querySelectorAll("[data-del]").forEach((b) =>
+      b.addEventListener("click", () => askDelete(b.dataset.del))
+    );
+  }
+
+  /* ---------- 删除 ----------
+     删除不可逆：先弹一层内联确认（要求输入 slug 才放行），
+     避免误点；云端条目与本地种子条目分别说明后果。 */
+  function askDelete(slug) {
+    if (Store.mode !== "cloud") {
+      alert("云端未连接，无法删除。");
+      return;
+    }
+    if (!Store.isSignedIn()) {
+      alert("请先登录，再删除条目。");
+      return;
+    }
+    const r = Store.bySlug(slug);
+    if (!r) {
+      alert("找不到该条目。");
+      return;
+    }
+
+    const host = document.getElementById("ccDelete");
+    if (!host) return;
+    const fromCloud = !!r._cloud;
+
+    host.hidden = false;
+    host.innerHTML = `
+      <div class="status-bar" style="border-color:var(--accent);margin-bottom:var(--space-3)">
+        <span><span class="dot on" style="background:var(--accent)"></span>确认删除</span>
+        <span class="micro">此操作不可撤销</span>
+      </div>
+      <p class="notice" style="text-align:left">
+        即将删除「<strong>${esc(r.title)}</strong>」（<span class="en">${esc(slug)}</span>）。
+        ${
+          fromCloud
+            ? "该条目及其全部历史版本将从云端永久移除，所有读者立刻不可见。"
+            : "该条目目前只是内置原文，云端没有对应记录，删除不会产生任何效果。"
+        }
+      </p>
+      <div class="field">
+        <label class="field-label">输入 slug 以确认：<span class="en">${esc(slug)}</span></label>
+        <input id="ccDelConfirm" type="text" autocomplete="off" placeholder="${esc(slug)}">
+      </div>
+      <div class="row" style="gap:var(--space-3)">
+        <button class="btn-ink" id="ccDelGo">确认删除</button>
+        <button class="btn-ink" id="ccDelCancel">取消</button>
+      </div>
+      <p class="notice" id="ccDelMsg" style="text-align:left;padding-top:var(--space-2)"></p>
+    `;
+
+    const msg = document.getElementById("ccDelMsg");
+    const input = document.getElementById("ccDelConfirm");
+    input.focus();
+
+    document.getElementById("ccDelCancel").addEventListener("click", () => {
+      host.hidden = true;
+      host.innerHTML = "";
+    });
+
+    document.getElementById("ccDelGo").addEventListener("click", async () => {
+      if (String(input.value).trim() !== slug) {
+        msg.textContent = "输入的 slug 与条目不符，未执行删除。";
+        return;
+      }
+      const btn = document.getElementById("ccDelGo");
+      btn.disabled = true;
+      msg.textContent = "正在删除…";
+      try {
+        await Store.remove(slug);
+        host.hidden = true;
+        host.innerHTML = "";
+        renderList();
+      } catch (e) {
+        msg.textContent = friendly(e);
+        btn.disabled = false;
+      }
+    });
   }
 
   /* ---------- 编辑器 ---------- */
@@ -302,6 +388,12 @@ window.CoCreate = (function () {
 
     /* 登录态由 SDK 事件驱动：续期、退出、失效都即时反映到界面 */
     Store.state.onAuthChange = () => {
+      /* 登录态一变，之前展开的删除确认即失效，收起避免误操作 */
+      const del = document.getElementById("ccDelete");
+      if (del) {
+        del.hidden = true;
+        del.innerHTML = "";
+      }
       paintStatus();
       renderList();
     };

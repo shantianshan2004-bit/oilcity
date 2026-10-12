@@ -449,8 +449,21 @@
   async function remove(slug) {
     if (state.mode !== "cloud") throw new Error("雲端未連接，無法刪除。");
     if (!isSignedIn()) throw new Error("請先登入。");
-    const { error } = await state.db().from("contents").delete().eq("slug", slug);
-    if (error) throw new Error(error.message || "刪除失敗");
+    if (!slug) throw new Error("缺少條目識別。");
+
+    /* 先删主记录：这一步必须成功，失败就整体中止 */
+    const res = await withRetry(
+      () => state.db().from("contents").delete().eq("slug", slug),
+      "删除 " + slug
+    );
+    if (res && res.error) throw new Error(res.error.message || "刪除失敗");
+
+    /* 再清掉该条目的历史版本，避免留下悬空的孤儿记录。
+       这一步失败不影响主记录已删除的事实，仅提示。 */
+    try {
+      await state.db().from("revisions").delete().eq("target_slug", slug);
+    } catch (_) {}
+
     state.contents = state.contents.filter((r) => r.slug !== slug);
   }
 
