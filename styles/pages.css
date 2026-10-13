@@ -12,15 +12,8 @@
   padding-top: var(--space-5);
 }
 
-#inkHero {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  opacity: 0.96;
-}
-/* 墨层是两个叠放的 <svg>（形 / 晕），必须绝对定位重合，
-   否则会上下排开、只剩第一层可见。 */
-#inkHero svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* 墨层现在由 .ink-field 统一管理（固定整屏、canvas 渲染），
+   本页不再需要任何覆盖 —— 之前那两个 <svg> 的定位规则一并撤掉。 */
 
 .hero-grid {
   display: grid;
@@ -42,8 +35,10 @@
   line-height: 0.94;
   letter-spacing: 0.14em;
   color: var(--ink);
-  /* 墨色在纸上的轻微不匀 */
+  /* 墨色在纸上的轻微不匀；压到墨时 --halo-shadow 会换成纸色光晕，
+     多一层阴影在后面，字就从墨里浮出来（见 styles/ink.css）。 */
   text-shadow:
+    var(--halo-shadow),
     0 0 1px rgba(234, 232, 225, 0.8),
     0.5px 0.5px 0 rgba(23, 23, 21, 0.14);
 }

@@ -65,7 +65,7 @@
 <script src="js/app.js"></script>
 <script>
   (async function () {
-    document.getElementById("inkHead").innerHTML = InkEngine.PRESETS.chapters();
+    InkEngine.mountAll();
     InkEngine.initReveal();
     await Store.init();
     App.mountChrome();

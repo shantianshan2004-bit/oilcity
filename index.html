@@ -14,7 +14,7 @@
 </head>
 <body data-page="home">
 
-<div class="ink-field" id="inkHero" data-parallax="0.05"></div>
+<div class="ink-field" id="inkHero"></div>
 
 <div class="page">
 
@@ -155,9 +155,9 @@
 <script src="js/app.js"></script>
 <script>
   (async function () {
-    /* 笔触：只在首页这一处渲染最重的一笔墨 */
-    document.getElementById("inkHero").innerHTML = InkEngine.PRESETS.home().svg;
-    InkEngine.initParallax();
+    /* 活墨：引擎自动找到 .ink-field 并接管，
+       每次加载随机种子，墨的走向都不一样 */
+    InkEngine.mountAll();
     InkEngine.initReveal();
 
     await Store.init();

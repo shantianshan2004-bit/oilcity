@@ -73,8 +73,7 @@
 <script src="js/app.js"></script>
 <script>
   (async function () {
-    document.getElementById("inkMusic").innerHTML = InkEngine.PRESETS.music();
-    InkEngine.initParallax();
+    InkEngine.mountAll();
     await Store.init();
     App.mountChrome();
     App.musicPage();

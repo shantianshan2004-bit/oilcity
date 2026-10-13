@@ -24,6 +24,14 @@
   --ink-06: rgba(23, 23, 21, 0.06);
   --paper-veil: rgba(234, 232, 225, 0.72);
 
+  /* —— 文字自动描边 ——
+     默认是一层全透明阴影：画不出任何东西，所以没压到墨时
+     文字与原来完全一致。引擎识别到文字底下有墨，就给它加 .on-ink，
+     这个变量被换成纸色的八向光晕，字身随之从墨里浮出来。
+     --halo-w 由引擎按字号写入（大字粗、小字细）。 */
+  --halo-shadow: 0 0 0 rgba(234, 232, 225, 0);
+  --halo-w: 2px;
+
   /* —— 字体 —— */
   --serif-cn: "Source Han Serif SC", "Noto Serif SC", "Songti SC",
               "STSong", "SimSun", "Sarasa Song SC", serif;

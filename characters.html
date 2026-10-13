@@ -60,7 +60,7 @@
 <script src="js/app.js"></script>
 <script>
   (async function () {
-    document.getElementById("inkHead").innerHTML = InkEngine.PRESETS.characters();
+    InkEngine.mountAll();
     await Store.init();
     App.mountChrome();
     App.charactersPage();

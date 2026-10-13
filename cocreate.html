@@ -170,7 +170,7 @@
 <script src="js/cocreate.js"></script>
 <script>
   (async function () {
-    document.getElementById("inkCoCreate").innerHTML = InkEngine.PRESETS.coCreate();
+    InkEngine.mountAll();
     InkEngine.initReveal();
     await Store.init();
     App.mountChrome();

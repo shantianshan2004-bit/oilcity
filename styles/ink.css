@@ -119,54 +119,69 @@ a {
   opacity: 0.7;
 }
 
-/* ---------- 墨的容器：承载 SVG 笔触 ---------- */
+/* ---------- 墨的容器：一整层活墨 ----------
+   墨不再是"画"好的图形，而是一层一直在长的活墨。
+   渲染在 canvas 上（见 js/ink-engine.js）：每帧只画几十个预渲染的
+   小色块，开销与墨滴数成正比、与画布面积无关 ——
+   上一版那种"滤镜被迫逐帧重算"的频闪，在这一版结构上不可能发生。
+
+   固定成整屏一层，墨才能穿过整个界面、与每一段文字相遇，
+   而不是只在页顶抹一道。 */
 .ink-field {
-  position: absolute;
+  position: fixed;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
-  z-index: 0;
 }
-.ink-field > svg {
-  position: absolute;
-  inset: 0;
+.ink-field > .ink-canvas {
+  display: block;
   width: 100%;
   height: 100%;
-  display: block;
-  /* 交给合成器：栅格化一次（含 SVG 滤镜），此后每帧只移动纹理。
-     will-change 是关键 —— 没有它浏览器会随动画逐帧重新栅格化，
-     等于每帧重跑一次 feTurbulence，墨就会频闪抽搐。 */
-  transform: translate3d(0, 0, 0);
-  will-change: transform, opacity;
-  backface-visibility: hidden;
+  /* multiply 让墨"渗进"纸里而不是浮在纸面上：
+     重叠处自然加深，纸的纤维还能透过墨看见。 */
+  mix-blend-mode: multiply;
 }
 
-/* ---------- 墨的呼吸：背景笔触极缓地流动、蔓延 ----------
-   动效只加在 <svg> 根元素上，绝不下沉到挂滤镜的 <g>。
-   形层与晕层反向漂移，周期 71s / 97s 互质，叠加后轨迹不重复；
-   晕层额外做浓淡呼吸 —— 墨像在纸上洇开又收回。
-   只用平移与极轻的旋转，不用 scale：
-   缩放会改变栅格化倍率，逼浏览器重算滤镜，同样会闪。 */
-.ink-field > .ink-svg-a { animation: inkFlowA 71s ease-in-out infinite alternate; }
-.ink-field > .ink-svg-b { animation: inkFlowB 97s ease-in-out infinite alternate; }
+/* ---------- 文字识别墨迹后自动描边 ----------
+   引擎按约 44px 的栅格记录墨的覆盖度，每 200ms 检一次文字块；
+   某块文字底下有墨，就给它加上 .on-ink。
+   .on-ink 只做一件事：把 --halo-shadow 换成纸色的多层光晕 ——
+   字身不动、不断行、不改字号，所以是"看得清"，不是"变了样"。
 
-@keyframes inkFlowA {
-  0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
-  32%  { transform: translate3d(-1.1%, 0.7%, 0) rotate(0.5deg); }
-  63%  { transform: translate3d(0.6%, -0.9%, 0) rotate(-0.33deg); }
-  100% { transform: translate3d(-0.5%, 0.5%, 0) rotate(0.22deg); }
-}
-@keyframes inkFlowB {
-  0%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0.62; }
-  28%  { transform: translate3d(1.5%, -0.9%, 0) rotate(-0.62deg); opacity: 1; }
-  57%  { transform: translate3d(-1.1%, 1.2%, 0) rotate(0.42deg); opacity: 0.72; }
-  80%  { transform: translate3d(0.8%, 0.7%, 0) rotate(-0.3deg); opacity: 0.92; }
-  100% { transform: translate3d(-0.45%, -0.6%, 0) rotate(0.2deg); opacity: 0.62; }
+   --halo-w 由引擎按字号写入（大字粗、小字细），
+   一处变量驱动八向 + 两层模糊，不必写死八条阴影。 */
+.on-ink {
+  --halo-shadow:
+    0 0 calc(var(--halo-w, 2px) * 2.4) var(--paper),
+    0 0 var(--halo-w, 2px) var(--paper),
+    var(--halo-w, 2px) 0 var(--halo-w, 2px) var(--paper),
+    calc(var(--halo-w, 2px) * -1) 0 var(--halo-w, 2px) var(--paper),
+    0 var(--halo-w, 2px) var(--halo-w, 2px) var(--paper),
+    0 calc(var(--halo-w, 2px) * -1) var(--halo-w, 2px) var(--paper),
+    var(--halo-w, 2px) var(--halo-w, 2px) var(--halo-w, 2px) var(--paper),
+    calc(var(--halo-w, 2px) * -1) calc(var(--halo-w, 2px) * -1) var(--halo-w, 2px) var(--paper);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ink-field > .ink-svg-a,
-  .ink-field > .ink-svg-b { animation: none; opacity: 1; }
+/* 参与"识别—描边"的文字。
+   平时的 --halo-shadow 是一层全透明阴影（画不出任何东西），
+   所以未压到墨时与原来完全一致；只有 .on-ink 生效才显出光晕。 */
+.hero-title-cn,
+.hero-line,
+.hero-sub,
+.title-lg,
+.reader-title,
+.section-title,
+.volume-name,
+.volume-desc,
+.entry .name,
+.entry .desc,
+.reading p,
+.lede,
+.hero-meta-num,
+.colophon p,
+.char-name,
+.song-title {
+  text-shadow: var(--halo-shadow);
 }
 
 /* 笔触落纸：缓慢渗开 */
