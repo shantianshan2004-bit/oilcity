@@ -92,13 +92,27 @@
 .hero-scroll .micro { letter-spacing: 0.3em; }
 
 @media (max-width: 900px) {
-  .hero-grid { grid-template-columns: 1fr; align-items: start; }
+  /* 手机上内容常常高过一屏：首屏改为自然流式排布，
+     底部那行"向下 · 故事自墨里显出"回到文档流里，
+     不再绝对定位压在统计区文字上（此前两者重叠成乱码状）。 */
+  .hero {
+    min-height: auto;
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
+  }
+  .hero-grid { grid-template-columns: 1fr; align-items: start; gap: var(--space-5); }
+  .hero-copy { padding-block: 0; }
   .hero-meta {
-    grid-template-columns: repeat(3, auto);
+    grid-template-columns: repeat(3, minmax(0, auto));
     justify-content: start;
-    gap: var(--space-4);
+    gap: var(--space-4) var(--space-5);
+    padding-bottom: 0;
   }
   .hero-entries { gap: var(--space-4); }
+  .hero-scroll {
+    position: static;
+    margin: var(--space-5) 0 0;
+  }
 }
 
 /* ---------------- 章节 ---------------- */

@@ -41,13 +41,13 @@ const nextId = (p) => `${p}-${(++uid).toString(36)}`;
    滤镜库
    ============================================================ */
 
-/** 纸纤维扰动：让笔触边缘毛糙、带摩擦 */
-function filterDisplace(id, scale = 22, freq = 0.022, octaves = 4) {
+/** 纸纤维扰动：让笔触边缘毛糙、带摩擦；turbAnim 可注入 SMIL 让噪声缓慢起伏 */
+function filterDisplace(id, scale = 22, freq = 0.022, octaves = 4, turbAnim = "") {
   return `
     <filter id="${id}" x="-30%" y="-30%" width="160%" height="160%"
             filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
       <feTurbulence type="fractalNoise" baseFrequency="${freq}"
-                    numOctaves="${octaves}" seed="7" result="noise"/>
+                    numOctaves="${octaves}" seed="7" result="noise">${turbAnim}</feTurbulence>
       <feDisplacementMap in="SourceGraphic" in2="noise"
                          scale="${scale}" xChannelSelector="R" yChannelSelector="G"/>
     </filter>`;
@@ -340,23 +340,49 @@ function sweep(opts = {}) {
 
 /* ============================================================
    组装：把笔路包进带滤镜的 <svg>
+   ------------------------------------------------------------
+   动效分两层：
+   · CSS 漂移（.ink-g1/2/3）—— 三层笔触各按不同周期缓慢平移、
+     微缩、轻旋，非整数周期比让运动永不重复，墨因此"活"；
+   · 滤镜蠕动 —— feTurbulence 的 baseFrequency 缓慢起伏，
+     笔触边缘随之不规则地蔓延。逐帧重算滤镜开销大，
+     只在桌面级环境（hover + 精确指针）开启，手机只跑合成动画。
    ============================================================ */
+function filterMotionAllowed() {
+  try {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+    return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  } catch (_) {
+    return false;
+  }
+}
+
 function compose(body, { viewBox, cls = "", color = "var(--ink)", extraFilters = [] }) {
   const fid = nextId("fx");
   const dryId = nextId("dry");
   const bleedId = nextId("bl");
+  const live = filterMotionAllowed();
+  /* 周期取质数错开，三层叠加后漂移轨迹不规则循环 */
+  const turbAnim = live
+    ? `<animate attributeName="baseFrequency"
+         values="0.02;0.0238;0.0176;0.0212;0.02"
+         keyTimes="0;0.28;0.55;0.8;1"
+         dur="41s" repeatCount="indefinite"
+         calcMode="spline"
+         keySplines="0.42 0 0.58 1;0.42 0 0.58 1;0.42 0 0.58 1;0.42 0 0.58 1"/>`
+    : "";
   return `
 <svg class="${cls}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice"
      xmlns="${NS}" aria-hidden="true" focusable="false">
   <defs>
-    ${filterDisplace(fid, 20, 0.02, 4)}
+    ${filterDisplace(fid, 20, 0.02, 4, turbAnim)}
     ${filterDryBrush(dryId, 12, 0.085)}
     ${filterBleed(bleedId, 3.4)}
     ${extraFilters.join("\n")}
   </defs>
-  <g style="color:${color}" filter="url(#${dryId})">${body}</g>
-  <g style="color:${color}" filter="url(#${fid})" opacity="0.55">${body}</g>
-  <g style="color:${color}" filter="url(#${bleedId})" opacity="0.22">${body}</g>
+  <g class="ink-g ink-g1" style="color:${color}" filter="url(#${dryId})">${body}</g>
+  <g class="ink-g ink-g2" style="color:${color}" filter="url(#${fid})" opacity="0.55">${body}</g>
+  <g class="ink-g ink-g3" style="color:${color}" filter="url(#${bleedId})" opacity="0.22">${body}</g>
 </svg>`;
 }
 

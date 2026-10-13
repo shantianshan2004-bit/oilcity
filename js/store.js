@@ -184,6 +184,24 @@
       map.set(row.slug, merged);
     }
     state.contents = Array.from(map.values());
+
+    /* 同名同类型的重复行只展示最新一条 —— 编辑时改了 slug 会另存新行，
+       旧行若不清理就会在所有页面以"旧版本"的面目继续出现。
+       这里按 type+title 分组留 updated_at 最新的，其余从展示层剔除
+       （云端行不动，只是不再显示）。 */
+    const keep = new Map();
+    const keyOf = (r) => `${r.type}::${String(r.title || "").trim()}`;
+    for (const r of state.contents) {
+      const k = keyOf(r);
+      const cur = keep.get(k);
+      if (!cur) { keep.set(k, r); continue; }
+      const tNew = r.updated_at || r.created_at || "";
+      const tCur = cur.updated_at || cur.created_at || "";
+      if (tNew >= tCur) keep.set(k, r);
+    }
+    if (keep.size !== state.contents.length) {
+      state.contents = Array.from(keep.values());
+    }
   }
 
   /* ============================================================
@@ -385,7 +403,7 @@
      先写 revisions（快照上一版），再 upsert contents。
      未登录一律拒绝，绝不写本地。
      ============================================================ */
-  async function save(entry, note) {
+  async function save(entry, note, prevSlug) {
     if (state.mode !== "cloud")
       throw new Error("雲端未連接。目前為原文只讀模式，無法儲存。");
     if (!isSignedIn()) throw new Error("請先登入，再提交修改。");
@@ -442,6 +460,23 @@
     );
     if (res && res.error) throw new Error(res.error.message || "儲存失敗");
 
+    /* slug 变更迁移：编辑条目时若改了识别名，旧 slug 的主行与版本
+       记录一并迁到新 slug 下 —— 否则旧行会以"旧版本"的面目留在
+       所有列表里，这正是之前出现同名重复条目的原因。 */
+    if (prevSlug && prevSlug !== slug) {
+      try {
+        await state
+          .db()
+          .from("revisions")
+          .update({ target_slug: slug })
+          .eq("target_slug", prevSlug);
+      } catch (_) {}
+      try {
+        await state.db().from("contents").delete().eq("slug", prevSlug);
+      } catch (_) {}
+      state.contents = state.contents.filter((r) => r.slug !== prevSlug);
+    }
+
     await pull();
     return bySlug(slug);
   }
@@ -463,6 +498,23 @@
     try {
       await state.db().from("revisions").delete().eq("target_slug", slug);
     } catch (_) {}
+
+    /* 删除后回读验证：此前 RLS 缺 DELETE 策略时，删除请求"成功"
+       但实际一行未删（PostgREST 对被策略拦下的行返回空结果不报错），
+       条目刷新后又出现。这里必须确认云端真没了才算删掉。 */
+    let gone = false;
+    try {
+      const chk = await state.db().from("contents").select("slug").eq("slug", slug).limit(1);
+      const rows = chk && chk.data;
+      gone = Array.isArray(rows) && rows.length === 0;
+    } catch (_) { gone = null; }
+    if (gone === false) {
+      throw new Error(
+        "服务端没有移除该条目（删除请求未报错，但记录仍在）。" +
+        "可能原因：这条记录不是当前登录账号创建的，或云端权限刚变更还未生效。" +
+        "请退出重新登录后再删一次；若仍失败请截图反馈。"
+      );
+    }
 
     state.contents = state.contents.filter((r) => r.slug !== slug);
   }

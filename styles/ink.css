@@ -133,6 +133,44 @@ a {
   display: block;
 }
 
+/* ---------- 墨的呼吸：背景笔触不规则地流动、蔓延 ----------
+   三层笔触各按质数周期（47s/67s/89s）漂移：平移、微缩、轻旋。
+   周期互不成比，叠加后的运动轨迹永不精确重复；
+   配合滤镜噪声蠕动（桌面端），墨像在纸上缓慢洇开。 */
+.ink-layer .ink-g {
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform;
+}
+.ink-layer .ink-g1 { animation: inkFlowA 47s ease-in-out infinite alternate; }
+.ink-layer .ink-g2 { animation: inkFlowB 67s ease-in-out infinite alternate; }
+.ink-layer .ink-g3 { animation: inkFlowC 89s ease-in-out infinite alternate; }
+
+@keyframes inkFlowA {
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); }
+  38%  { transform: translate(-0.9%, 0.6%) scale(1.024) rotate(0.45deg); }
+  71%  { transform: translate(0.5%, -0.8%) scale(0.99) rotate(-0.3deg); }
+  100% { transform: translate(-0.4%, 0.9%) scale(1.012) rotate(0.2deg); }
+}
+@keyframes inkFlowB {
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33%  { transform: translate(1.2%, -0.5%) scale(0.986) rotate(-0.5deg); }
+  64%  { transform: translate(-0.7%, 0.9%) scale(1.03) rotate(0.35deg); }
+  100% { transform: translate(0.9%, 0.4%) scale(0.994) rotate(-0.25deg); }
+}
+@keyframes inkFlowC {
+  0%   { transform: translate(0, 0) scale(1); }
+  45%  { transform: translate(-1.4%, -1%) scale(1.045); }
+  78%  { transform: translate(1%, 1.2%) scale(0.97); }
+  100% { transform: translate(-0.6%, -0.5%) scale(1.02); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ink-layer .ink-g1,
+  .ink-layer .ink-g2,
+  .ink-layer .ink-g3 { animation: none; }
+}
+
 /* 笔触落纸：缓慢渗开 */
 .stroke {
   opacity: 0;

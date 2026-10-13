@@ -283,7 +283,13 @@ window.CoCreate = (function () {
 
     msg.textContent = "正在提交…";
     try {
-      await Store.save(entry, editing && editing.slug ? "内容修改" : "新建条目");
+      /* 编辑已有条目时把旧 slug 传入：若识别名被修改，
+         数据层会把旧行与版本记录一并迁移，避免留下旧版本条目 */
+      await Store.save(
+        entry,
+        editing && editing.slug ? "内容修改" : "新建条目",
+        editing && editing.slug && editing.slug !== slug ? editing.slug : undefined
+      );
       msg.textContent = "已保存并同步。";
       closeEditor();
       paintStatus();
