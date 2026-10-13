@@ -18,7 +18,9 @@
   z-index: 0;
   opacity: 0.96;
 }
-#inkHero svg { width: 100%; height: 100%; display: block; }
+/* 墨层是两个叠放的 <svg>（形 / 晕），必须绝对定位重合，
+   否则会上下排开、只剩第一层可见。 */
+#inkHero svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 .hero-grid {
   display: grid;

@@ -41,13 +41,13 @@ const nextId = (p) => `${p}-${(++uid).toString(36)}`;
    滤镜库
    ============================================================ */
 
-/** 纸纤维扰动：让笔触边缘毛糙、带摩擦；turbAnim 可注入 SMIL 让噪声缓慢起伏 */
-function filterDisplace(id, scale = 22, freq = 0.022, octaves = 4, turbAnim = "") {
+/** 纸纤维扰动：让笔触边缘毛糙、带摩擦 */
+function filterDisplace(id, scale = 22, freq = 0.022, octaves = 4) {
   return `
     <filter id="${id}" x="-30%" y="-30%" width="160%" height="160%"
             filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
       <feTurbulence type="fractalNoise" baseFrequency="${freq}"
-                    numOctaves="${octaves}" seed="7" result="noise">${turbAnim}</feTurbulence>
+                    numOctaves="${octaves}" seed="7" result="noise"/>
       <feDisplacementMap in="SourceGraphic" in2="noise"
                          scale="${scale}" xChannelSelector="R" yChannelSelector="G"/>
     </filter>`;
@@ -341,48 +341,46 @@ function sweep(opts = {}) {
 /* ============================================================
    组装：把笔路包进带滤镜的 <svg>
    ------------------------------------------------------------
-   动效分两层：
-   · CSS 漂移（.ink-g1/2/3）—— 三层笔触各按不同周期缓慢平移、
-     微缩、轻旋，非整数周期比让运动永不重复，墨因此"活"；
-   · 滤镜蠕动 —— feTurbulence 的 baseFrequency 缓慢起伏，
-     笔触边缘随之不规则地蔓延。逐帧重算滤镜开销大，
-     只在桌面级环境（hover + 精确指针）开启，手机只跑合成动画。
-   ============================================================ */
-function filterMotionAllowed() {
-  try {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
-    return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-  } catch (_) {
-    return false;
-  }
-}
+   【动效铁律】动画只加在 <svg> 根元素上。
 
+   <svg> 根是 HTML 层元素，被提升为合成层后，浏览器把滤镜结果
+   栅格化成一张纹理；之后每帧只是移动/旋转这张纹理，不重算滤镜。
+
+   反面做法（曾导致"动画频闪抽搐"）：把 transform 动画加在挂了
+   filter 的 <g> 上。feTurbulence 是分形噪声，滤镜必须随每帧的
+   变换重新生成噪声场、重做位移映射，笔触轮廓于是剧烈抖动；
+   若再叠加 feTurbulence 的 baseFrequency 动画，等于每帧换一套
+   噪声，整幅墨会抽搐到无法观看。
+
+   两个根元素：
+     ink-svg-a  干笔飞白 + 纸纤维扰动 —— 墨的"形"
+     ink-svg-b  墨晕 —— 墨的"洇"，单独漂移并做浓淡呼吸
+   ============================================================ */
 function compose(body, { viewBox, cls = "", color = "var(--ink)", extraFilters = [] }) {
   const fid = nextId("fx");
   const dryId = nextId("dry");
   const bleedId = nextId("bl");
-  const live = filterMotionAllowed();
-  /* 周期取质数错开，三层叠加后漂移轨迹不规则循环 */
-  const turbAnim = live
-    ? `<animate attributeName="baseFrequency"
-         values="0.02;0.0238;0.0176;0.0212;0.02"
-         keyTimes="0;0.28;0.55;0.8;1"
-         dur="41s" repeatCount="indefinite"
-         calcMode="spline"
-         keySplines="0.42 0 0.58 1;0.42 0 0.58 1;0.42 0 0.58 1;0.42 0 0.58 1"/>`
-    : "";
+
+  const open = (klass) =>
+    `<svg class="${`${cls} ${klass}`.trim()}" viewBox="${viewBox}" ` +
+    `preserveAspectRatio="xMidYMid slice" xmlns="${NS}" ` +
+    `aria-hidden="true" focusable="false">`;
+
   return `
-<svg class="${cls}" viewBox="${viewBox}" preserveAspectRatio="xMidYMid slice"
-     xmlns="${NS}" aria-hidden="true" focusable="false">
+${open("ink-svg ink-svg-a")}
   <defs>
-    ${filterDisplace(fid, 20, 0.02, 4, turbAnim)}
     ${filterDryBrush(dryId, 12, 0.085)}
-    ${filterBleed(bleedId, 3.4)}
+    ${filterDisplace(fid, 20, 0.02, 4)}
     ${extraFilters.join("\n")}
   </defs>
-  <g class="ink-g ink-g1" style="color:${color}" filter="url(#${dryId})">${body}</g>
-  <g class="ink-g ink-g2" style="color:${color}" filter="url(#${fid})" opacity="0.55">${body}</g>
-  <g class="ink-g ink-g3" style="color:${color}" filter="url(#${bleedId})" opacity="0.22">${body}</g>
+  <g style="color:${color}" filter="url(#${dryId})">${body}</g>
+  <g style="color:${color}" filter="url(#${fid})" opacity="0.55">${body}</g>
+</svg>
+${open("ink-svg ink-svg-b")}
+  <defs>
+    ${filterBleed(bleedId, 3.4)}
+  </defs>
+  <g style="color:${color}" filter="url(#${bleedId})" opacity="0.22">${body}</g>
 </svg>`;
 }
 
