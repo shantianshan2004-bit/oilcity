@@ -29,7 +29,9 @@ body {
   position: relative;
 }
 
-/* ---------- 宣纸纤维：分形噪声叠加 ---------- */
+/* ---------- 宣纸纤维 + 胶片颗粒：两层噪声叠加 ----------
+   第一层：粗纤维（纸的肌理，透过墨还能看见）
+   第二层：细颗粒（暗房照片那种均匀的胶片灰） */
 body::before {
   content: "";
   position: fixed;
@@ -38,7 +40,9 @@ body::before {
   z-index: 0;
   opacity: 0.5;
   mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='320' height='320' filter='url(%23g)' opacity='0.42'/></svg>");
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='320' height='320' filter='url(%23g)' opacity='0.42'/></svg>"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='g2'><feTurbulence type='fractalNoise' baseFrequency='2.6' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23g2)' opacity='0.16'/></svg>");
 }
 
 /* 纸的轻微受潮不均：两团极淡的墨晕 */
@@ -120,13 +124,12 @@ a {
 }
 
 /* ---------- 墨的容器：一整层活墨 ----------
-   墨不再是"画"好的图形，而是一层一直在长的活墨。
-   渲染在 canvas 上（见 js/ink-engine.js）：每帧只画几十个预渲染的
-   小色块，开销与墨滴数成正比、与画布面积无关 ——
-   上一版那种"滤镜被迫逐帧重算"的频闪，在这一版结构上不可能发生。
+   墨不是"画"好的图形，是一层一直在洇的活墨。
+   渲染在 canvas 上（见 js/ink-engine.js）：每团墨是不规则
+   有机轮廓的多层叠印，形变低频重生成、运动每帧插值 ——
+   开销与墨渍数成正比、与画布面积无关。
 
-   固定成整屏一层，墨才能穿过整个界面、与每一段文字相遇，
-   而不是只在页顶抹一道。 */
+   固定成整屏一层，墨才能穿过整个界面、与每一段文字相遇。 */
 .ink-field {
   position: fixed;
   inset: 0;
