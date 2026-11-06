@@ -309,6 +309,8 @@ body[data-page="music"] {
   background: #1B1A18;
   color: #D9D6CD;
 }
+/* 深色页上描边必须用底色，不能用纸色 —— 用纸色就是给每个字套了个白灯泡 */
+body[data-page="music"] .on-ink { --halo-color: #1B1A18; }
 body[data-page="music"]::before { opacity: 0.32; }
 body[data-page="music"]::after {
   background:

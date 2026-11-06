@@ -145,6 +145,15 @@ a {
   mix-blend-mode: multiply;
 }
 
+/* 深色页：multiply 会把墨吃掉 —— 黑墨乘在黑底上还是黑，等于没画。
+   这一页把墨反相成"淡乳白"，再用 screen 叠上去，墨才浮得出来，
+   像夜里对着灯看一张被水打湿的纸。 */
+body[data-page="music"] .ink-field > .ink-canvas {
+  mix-blend-mode: screen;
+  filter: invert(1);
+  opacity: 0.62;
+}
+
 /* ---------- 文字识别墨迹后自动描边 ----------
    引擎按约 44px 的栅格记录墨的覆盖度，每 200ms 检一次文字块；
    某块文字底下有墨，就给它加上 .on-ink。
@@ -155,14 +164,14 @@ a {
    一处变量驱动八向 + 两层模糊，不必写死八条阴影。 */
 .on-ink {
   --halo-shadow:
-    0 0 calc(var(--halo-w, 2px) * 2.4) var(--paper),
-    0 0 var(--halo-w, 2px) var(--paper),
-    var(--halo-w, 2px) 0 var(--halo-w, 2px) var(--paper),
-    calc(var(--halo-w, 2px) * -1) 0 var(--halo-w, 2px) var(--paper),
-    0 var(--halo-w, 2px) var(--halo-w, 2px) var(--paper),
-    0 calc(var(--halo-w, 2px) * -1) var(--halo-w, 2px) var(--paper),
-    var(--halo-w, 2px) var(--halo-w, 2px) var(--halo-w, 2px) var(--paper),
-    calc(var(--halo-w, 2px) * -1) calc(var(--halo-w, 2px) * -1) var(--halo-w, 2px) var(--paper);
+    0 0 calc(var(--halo-w, 2px) * 1.3) var(--halo-color, var(--paper)),
+    0 0 var(--halo-w, 2px) var(--halo-color, var(--paper)),
+    var(--halo-w, 2px) 0 var(--halo-w, 2px) var(--halo-color, var(--paper)),
+    calc(var(--halo-w, 2px) * -1) 0 var(--halo-w, 2px) var(--halo-color, var(--paper)),
+    0 var(--halo-w, 2px) var(--halo-w, 2px) var(--halo-color, var(--paper)),
+    0 calc(var(--halo-w, 2px) * -1) var(--halo-w, 2px) var(--halo-color, var(--paper)),
+    var(--halo-w, 2px) var(--halo-w, 2px) var(--halo-w, 2px) var(--halo-color, var(--paper)),
+    calc(var(--halo-w, 2px) * -1) calc(var(--halo-w, 2px) * -1) var(--halo-w, 2px) var(--halo-color, var(--paper));
 }
 
 /* 参与"识别—描边"的文字。
