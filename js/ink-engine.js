@@ -1,27 +1,31 @@
 /* ============================================================
-   油城往事 · 活墨引擎（Living Ink · Organic Diffusion）
+   油城往事 · 流墨引擎（Flowing Ink · Flow-Field Ribbons）
    ------------------------------------------------------------
-   墨是"渗"出来的：一团墨落在吸水的纸上，沿纸纤维慢慢洇开，
-   边缘长出毛细的须，中心积成深色的池，颜料随时间干去、
-   淡去，然后另一团墨在别处悄悄落纸。
-   每次打开页面种子不同，落点、大小、浓淡、寿命都不一样。
+   墨不是"团"，是"迹"：一笔湿墨落在吸水纸上，被纸下的水流拖着
+   走 —— 于是有了连续的弧、拖长的带、收细的尾和分叉的丝。
+   页面上没有圆形、没有云朵、没有漂浮的墨团，只有一直在改变自己
+   形状的墨迹。
 
-   四条物理规则
-     1. 有机轮廓   每团墨的边界由三维值噪声（角度×角度×时间）
-                  扰动出来 —— 不规则、不对称、随时间缓慢蠕动，
-                  不是圆形，也不是缩放平移
-     2. 多层浓度   每团墨是 12 层错位的轮廓叠印：外层大而淡、
-                  内层小而浓，叠出"中心浓黑、边缘灰晕"的梯度；
-                  各层轮廓不完全重合，边缘自然成纤维状渗染
-     3. 毛细渗透   墨渍边缘长出细须（纤维状扩散），随时间
-                  舒展、消隐；大墨渍干后颜料聚向边缘（咖啡环）
-     4. 慢速漂移   墨心被无散度流场推着极缓地走，半径按
-                  √t 毛细扩散生长、再随呼吸噪声起伏，
-                  各墨渍的速度、周期、寿命彼此独立
+   六条规则
+     1. 流场     标量势的旋度（无散度）叠一个缓慢自转的涡心。
+                 全网各处方向不同、速度不同，墨迹因此走弯曲的路径，
+                 而不是同向平移
+     2. 自我形变 每条墨迹是一串节点。每个节点按自己的速度被流场
+                 推走，再用张力拉回邻居的中点 —— 墨带于是被拉伸、
+                 扭曲、折叠、局部堆积。这是"形态在变"，不是"位置在变"
+     3. 质量守恒 局部拉得越长墨越细、挤在一起就积成浓黑块，
+                 笔锋与枯笔的分野全在这一条
+     4. 持续更新 笔尖沿流场缓缓前探、尾巴退回纸里，形态一直在换，
+                 但没有循环、没有关键帧
+     5. 三层洇散 core 0.85x / mid 0.30x / soft 0.14x 三个离屏层，
+                 同一笔在每层以不同宽度、不同浓度出墨，上采样时
+                 天然形成三级高斯模糊 —— 每个元素天生有自己的模糊半径
+     6. 记忆与干燥 墨累积在持久层上，按各自的半衰期褪去。
+                 走得慢的地方墨积得厚，走得快的地方只留一道淡痕，
+                 这就是长曝光照片里那种"时间沉积"的浓淡
 
-   绘制开销
-     墨渍形变极慢，贴图每 ~130ms 才重生成一次（分摊到各帧）；
-     每帧只是 clearRect + 少量 drawImage —— 无滤镜、无逐像素运算。
+   绘制开销：每帧只画十几次多边形填充 + 三次全屏合成，
+   无滤镜、无逐像素运算、无贴图重生成。
    ============================================================ */
 
 (function () {
@@ -29,10 +33,12 @@
 
   /* ---------- 纸与墨：纯黑 / 深灰 / 浅灰，米白由纸承担 ---------- */
   const INK = { r: 23, g: 23, b: 21 };
-  const inkA = (a) => "rgba(" + INK.r + "," + INK.g + "," + INK.b + "," + a + ")";
+  const inkA = function (a) {
+    return "rgba(" + INK.r + "," + INK.g + "," + INK.b + "," + a + ")";
+  };
 
-  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = function (v, a, b) { return v < a ? a : v > b ? b : v; };
+  const lerp = function (a, b, t) { return a + (b - a) * t; };
   const TAU = Math.PI * 2;
 
   /* ---------- 确定性随机（种子不同 → 每次呈现不同） ---------- */
@@ -50,8 +56,7 @@
      1. 三维值噪声
      ------------------------------------------------------------
      值噪声：格点上有确定的伪随机值，坐标之间做平滑插值。
-     fbm 两层倍频叠加，足够有机，且比 simplex 便宜。
-     一切"不规则"都来自它：轮廓蠕动、半径呼吸、浓度斑驳。
+     墨迹的粗细起伏、边缘毛刺、纸张吸墨的不均，全部来自它。
      ============================================================ */
   function hash3(x, y, z) {
     let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(z, 1440662683)) | 0;
@@ -59,14 +64,14 @@
     h ^= h >>> 16;
     return (h >>> 0) / 4294967296;
   }
-  const fade = (t) => t * t * (3 - 2 * t);
+  const fadeTab = function (t) { return t * t * (3 - 2 * t); };
 
   function noise3(x, y, z) {
     const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
-    const xf = fade(x - xi), yf = fade(y - yi), zf = fade(z - zi);
-    const c000 = hash3(xi, yi, zi),       c100 = hash3(xi + 1, yi, zi);
-    const c010 = hash3(xi, yi + 1, zi),   c110 = hash3(xi + 1, yi + 1, zi);
-    const c001 = hash3(xi, yi, zi + 1),   c101 = hash3(xi + 1, yi, zi + 1);
+    const xf = fadeTab(x - xi), yf = fadeTab(y - yi), zf = fadeTab(z - zi);
+    const c000 = hash3(xi, yi, zi),         c100 = hash3(xi + 1, yi, zi);
+    const c010 = hash3(xi, yi + 1, zi),     c110 = hash3(xi + 1, yi + 1, zi);
+    const c001 = hash3(xi, yi, zi + 1),     c101 = hash3(xi + 1, yi, zi + 1);
     const c011 = hash3(xi, yi + 1, zi + 1), c111 = hash3(xi + 1, yi + 1, zi + 1);
     const x00 = lerp(c000, c100, xf), x10 = lerp(c010, c110, xf);
     const x01 = lerp(c001, c101, xf), x11 = lerp(c011, c111, xf);
@@ -74,205 +79,119 @@
   }
 
   function fbm3(x, y, z) {
-    return 0.646 * noise3(x, y, z) + 0.354 * noise3(x * 2.13 + 31.4, y * 2.13 + 17.7, z * 2.13 + 5.9);
+    return 0.646 * noise3(x, y, z) +
+           0.354 * noise3(x * 2.13 + 31.4, y * 2.13 + 17.7, z * 2.13 + 5.9);
   }
 
   /* ============================================================
-     2. 流场：标量势 φ 的旋度（无散度 → 墨只被推着走）
+     2. 流场
+     ------------------------------------------------------------
+     φ 是标量势，速度取旋度 (∂φ/∂y, −∂φ/∂x)：
+     数学上无散度 —— 墨被推着走，但不会在流场里堆积成团。
+     再叠一个绕中心的切向涡旋，让某些段打旋、某些段直出。
      ============================================================ */
-  const GH = 1.7;
+  const GH = 6;
+  const INV2GH = 1 / (2 * GH);
   const _v = [0, 0];
 
-  function potential(x, y, t, k) {
+  function pot(x, y, t, F) {
     return (
-      Math.sin(x * k.f1 + t * k.s1) * Math.cos(y * k.f2 - t * k.s2) +
-      0.62 * Math.sin((x + y) * k.f3 - t * k.s3) +
-      0.45 * Math.cos((x - y) * k.f4 + t * k.s4)
+      Math.sin(x * F.f1 + t * F.s1) * Math.cos(y * F.f2 - t * F.s2) +
+      0.55 * Math.sin((x - y) * F.f3 + t * F.s3)
     );
   }
 
-  function flowAt(x, y, t, k, out) {
-    const a = potential(x, y + GH, t, k);
-    const b = potential(x, y - GH, t, k);
-    const c = potential(x + GH, y, t, k);
-    const d = potential(x - GH, y, t, k);
-    const dx = (a - b) / (2 * GH);
-    const dy = -(c - d) / (2 * GH);
-    const m = Math.sqrt(dx * dx + dy * dy) || 1;
-    out[0] = dx / m;
-    out[1] = dy / m;
+  function velAt(x, y, t, F, out) {
+    const a = pot(x, y + GH, t, F);
+    const b = pot(x, y - GH, t, F);
+    const c = pot(x + GH, y, t, F);
+    const d = pot(x - GH, y, t, F);
+    let vx = (a - b) * INV2GH;
+    let vy = -(c - d) * INV2GH;
+
+    /* 涡心：绕一点旋转 —— 墨迹因此有"打旋"的段，不是全网同向 */
+    const dx = x - F.vx;
+    const dy = y - F.vy;
+    const d2 = dx * dx + dy * dy + 900;
+    const w = F.vs / (1 + d2 / F.vr2);
+    const inv = 1 / Math.sqrt(d2);
+    vx += -dy * inv * w * F.spin;
+    vy += dx * inv * w * F.spin;
+
+    const m = Math.sqrt(vx * vx + vy * vy) || 1;
+    out[0] = vx / m;
+    out[1] = vy / m;
     return out;
   }
 
   /* ============================================================
-     3. 三类墨渍
+     3. 三类墨迹
      ------------------------------------------------------------
-     wash 泼   大而淡，寿命长，几乎不动，干后颜料聚向边缘
-     pool 池   中等，核心浓黑 —— 画面的重心所在
-     speck 点  小而重，短命 —— 颗粒感与呼吸
+     band   主带   宽、重、长，画面的骨架与视觉重心
+     thread 游丝   极细，跑得远，多半贴着主带走 —— 层叠与分叉
+     broad  淡带   很宽很淡，稀释后的大笔横扫，负责空间层次
      ============================================================ */
   const KINDS = {
-    wash: {
-      r0: [90, 160],        /* 基础半径（px） */
-      life: [70, 130],      /* 寿命（秒） */
-      baseA: 0.62,          /* 整体浓度 */
-      edgeAmp: 0.42,        /* 轮廓扰动幅度（比例） */
-      cFreq: 1.25,          /* 轮廓噪声频率 → 少瓣、更不对称 */
-      cSpeed: [0.03, 0.07], /* 轮廓蠕动速度 */
-      bSpeed: [0.015, 0.03],/* 呼吸速度 */
-      diffuse: 30,          /* 毛细扩散（越大长得越慢） */
-      maxGrow: 1.6,
-      drift: 3.5,           /* 漂移速度 */
-      fiber: 1.0,           /* 毛细须的量 */
-      ringy: 0.75,          /* 咖啡环概率 */
-      blotch: 3,            /* 内部深斑数量 */
-      sat: 4,               /* 卫星墨点数量 */
+    band: {
+      p: 0.34,
+      n: [40, 60],          /* 节点数 */
+      seg: [7, 11],         /* 节点间距（px） */
+      hw: [7, 17],          /* 笔锋半宽（px） */
+      speed: [3.5, 7],      /* 每秒被流场推进的距离 */
+      tens: [0.05, 0.13],   /* 张力：越大越"绷直" */
+      life: [34, 62],       /* 寿命（秒） */
+      taper: 0.5,           /* 尾巴收细到多少 */
+      mass: 1.15,           /* 出墨量 */
+      lay: [0.74, 0.22, 0.04],
     },
-    pool: {
-      r0: [46, 110],
-      life: [45, 90],
-      baseA: 0.9,
-      edgeAmp: 0.32,
-      cFreq: 1.8,
-      cSpeed: [0.05, 0.12],
-      bSpeed: [0.025, 0.05],
-      diffuse: 14,
-      maxGrow: 1.5,
-      drift: 7,
-      fiber: 0.6,
-      ringy: 0.2,
-      blotch: 5,
-      sat: 2,
+    thread: {
+      p: 0.50,
+      n: [26, 44],
+      seg: [6, 10],
+      hw: [2.0, 5.2],
+      speed: [7, 16],
+      tens: [0.09, 0.22],
+      life: [24, 46],
+      taper: 0.14,
+      mass: 0.8,
+      lay: [0.84, 0.14, 0.02],
     },
-    speck: {
-      r0: [7, 24],
-      life: [22, 48],
-      baseA: 0.95,
-      edgeAmp: 0.24,
-      cFreq: 2.8,
-      cSpeed: [0.08, 0.18],
-      bSpeed: [0.04, 0.08],
-      diffuse: 6,
-      maxGrow: 1.35,
-      drift: 11,
-      fiber: 0.25,
-      ringy: 0,
-      blotch: 0,
-      sat: 0,
+    broad: {
+      p: 0.16,
+      n: [28, 42],
+      seg: [10, 16],
+      hw: [20, 34],
+      speed: [3, 6],
+      tens: [0.04, 0.10],
+      life: [40, 70],
+      taper: 0.3,
+      mass: 0.32,
+      lay: [0.26, 0.40, 0.34],
     },
   };
-  const KIND_NAMES = ["wash", "pool", "speck"];
 
-  /* 参数完备性断言：一次编辑事故（字段丢失 → NaN → 静默不画）
-     足以让整层墨消失，这里把字段名列全，缺一个就早点炸出来。 */
-  const KIND_FIELDS = [
-    "r0", "life", "baseA", "edgeAmp", "cFreq", "cSpeed", "bSpeed",
-    "diffuse", "maxGrow", "drift", "fiber", "ringy", "blotch", "sat",
+  const KIND_NAMES = ["band", "thread", "broad"];
+  const KIND_FIELDS = ["p", "n", "seg", "hw", "speed", "tens", "life", "taper", "mass", "lay"];
+
+  /* 上一次重构踩过的坑：参数对象里漏字段 → NaN → 整类墨静默不画。
+     所以字段完整性在运行时自检一次，缺了就在控制台喊出来。 */
+  for (let i = 0; i < KIND_NAMES.length; i++) {
+    const K = KINDS[KIND_NAMES[i]];
+    for (let j = 0; j < KIND_FIELDS.length; j++) {
+      if (K[KIND_FIELDS[j]] === undefined) {
+        if (window.console) console.warn("ink: KINDS." + KIND_NAMES[i] + " 缺字段 " + KIND_FIELDS[j]);
+      }
+    }
+  }
+
+  /* 三层洇散：分辨率越低，上采样时的模糊半径越大。
+     s  离屏层缩放    tau 干燥半衰期（秒）   wm 出墨宽度倍数 */
+  const LAYERS = [
+    { s: 0.85, tau: 6.0, wm: 1.0, out: 1.0 },    /* core 墨身 */
+    { s: 0.30, tau: 8.5, wm: 1.5, out: 0.95 },   /* mid  洇开 */
+    { s: 0.14, tau: 12.0, wm: 1.95, out: 0.5 },  /* soft 外围光晕 */
   ];
-  for (let ki = 0; ki < KIND_NAMES.length; ki++) {
-    const K = KINDS[KIND_NAMES[ki]];
-    for (let fi = 0; fi < KIND_FIELDS.length; fi++) {
-      if (K[KIND_FIELDS[fi]] === undefined) {
-        throw new Error("ink-engine: KINDS." + KIND_NAMES[ki] + "." + KIND_FIELDS[fi] + " 缺失");
-      }
-    }
-  }
 
-  /* ============================================================
-     4. 一团墨
-     ============================================================ */
-  function makeBlot(kind, x, y, rnd, scaleK) {
-    const K = KINDS[kind];
-    const r0 = lerp(K.r0[0], K.r0[1], rnd()) * scaleK;
-
-    /* 出生时就带好全套"个性"：噪声种子、蠕动速度、呼吸相位、
-       毛细须的角度分布、内部深斑的落点、卫星墨点的位置。
-       这些只定一次，之后只随时间演化 —— 形状稳定地变，不闪变。 */
-    const fibers = [];
-    if (K.fiber > 0) {
-      const n = Math.max(3, Math.round((r0 / 9) * K.fiber));
-      for (let i = 0; i < n; i++) {
-        fibers.push({
-          ang: rnd() * TAU,
-          len: 0.1 + rnd() * 0.26,
-          w: 0.6 + rnd() * 1.4,
-          a: 0.05 + rnd() * 0.1,
-          ph: rnd() * 10,
-        });
-      }
-    }
-    const blotches = [];
-    for (let i = 0; i < K.blotch; i++) {
-      blotches.push({
-        ox: (rnd() - 0.5) * 0.9,
-        oy: (rnd() - 0.5) * 0.9,
-        r: 0.16 + rnd() * 0.22,
-        a: 0.22 + rnd() * 0.3,
-        salt: rnd() * 20,
-      });
-    }
-    const sats = [];
-    for (let i = 0; i < K.sat; i++) {
-      sats.push({
-        ang: rnd() * TAU,
-        dist: 1.15 + rnd() * 0.55,
-        r: 1.5 + rnd() * 5,
-        a: 0.18 + rnd() * 0.3,
-      });
-    }
-
-    return {
-      kind: kind,
-      x: x, y: y,
-      vx: 0, vy: 0,
-      r0: r0,
-      r: r0,
-      age: 0,
-      life: lerp(K.life[0], K.life[1], rnd()),
-      lifeT: 0,
-      seed: rnd() * 100,
-      /* 轮廓与呼吸 */
-      cSpeed: lerp(K.cSpeed[0], K.cSpeed[1], rnd()),
-      bSpeed: lerp(K.bSpeed[0], K.bSpeed[1], rnd()),
-      bPh: rnd() * 10,
-      /* 拉伸（横向洇开）：方向与幅度都由噪声慢调 */
-      stAng: rnd() * TAU,
-      stSpeed: 0.01 + rnd() * 0.03,
-      stAmp: 0.22 + rnd() * 0.42,
-      ringy: rnd() < K.ringy,
-      fibers: fibers,
-      blotches: blotches,
-      sats: sats,
-      /* 渲染 */
-      cv: null,
-      cvPad: 0,
-      nextR: 0,
-      baseA: K.baseA * (0.82 + rnd() * 0.36),
-      salt: rnd() * 50,
-    };
-  }
-
-  /* 轮廓半径系数：角度 × 时间 → fbm 噪声扰动。
-     salt 让每层叠印、每个墨渍的轮廓彼此错开。 */
-  function contourAt(b, ang, t, salt) {
-    const u = Math.cos(ang) * KINDS[b.kind].cFreq + b.seed * 1.7 + salt;
-    const v = Math.sin(ang) * KINDS[b.kind].cFreq + b.seed * 0.9 + salt * 0.6;
-    const w = t * b.cSpeed + b.seed + salt * 0.31;
-    return 1 + KINDS[b.kind].edgeAmp * (fbm3(u, v, w) - 0.5) * 2;
-  }
-
-  /* 生命周期包络：淡入 → 驻留 → 缓缓淡去 */
-  function envOf(b) {
-    const fi = clamp(b.lifeT / 0.12, 0, 1);
-    const fadeIn = fi * fi * (3 - 2 * fi);
-    const fo = clamp((b.lifeT - 0.62) / 0.38, 0, 1);
-    const fadeOut = 1 - fo * fo * (3 - 2 * fo);
-    return fadeIn * fadeOut;
-  }
-
-  /* ============================================================
-     5. 一层墨（一个页面一层）
-     ============================================================ */
   const ANCHOR_SEL = [
     ".hero-title", ".hero-lines", ".hero-meta", ".hero-entries", ".hero-scroll",
     ".title-lg", ".reader-title", ".section-title", ".rule-ink",
@@ -289,9 +208,10 @@
     ".entry .name", ".entry .desc",
     ".reading p", ".lede", ".hero-meta-num",
     ".colophon p",
+    ".brand", ".nav a", ".nav-toggle",
   ].join(",");
 
-  class LivingInk {
+  class FlowingInk {
     constructor(host) {
       this.host = host;
 
@@ -303,31 +223,43 @@
       this.canvas = canvas;
       this.ctx = canvas.getContext("2d", { alpha: true });
 
-      const seed = (Math.random() * 0xffffffff) >>> 0;
+      /* 种子：正常访问每次不同；带 ?inkseed=N 可复现同一构图（排查用） */
+      const fixSeed = (String(window.location.search || "").match(/inkseed=(\d+)/) || [])[1];
+      const seed = fixSeed ? (parseInt(fixSeed, 10) >>> 0) : (Math.random() * 0xffffffff) >>> 0;
       this.seed = seed;
       this.rnd = mulberry32(seed);
 
-      this.blobs = [];
+      this.ribs = [];
       this.t = 0;
       this.frame = 0;
       this.acc = 0;
       this.last = 0;
       this.lastHalo = 0;
       this.raf = 0;
+      this.refillAcc = 0;
       this.w = 0;
       this.h = 0;
       this.dpr = 1;
 
-      /* 全场共用的流场参数（每个墨渍的响应速度各自不同） */
-      this.k = {
-        f1: 0.0014 + this.rnd() * 0.0018,
-        f2: 0.0016 + this.rnd() * 0.0020,
-        f3: 0.0009 + this.rnd() * 0.0013,
-        f4: 0.0011 + this.rnd() * 0.0015,
-        s1: 0.020 + this.rnd() * 0.028,
-        s2: 0.016 + this.rnd() * 0.024,
-        s3: 0.012 + this.rnd() * 0.020,
-        s4: 0.014 + this.rnd() * 0.022,
+      /* 流场：每页一套，方向和涡心各不相同 */
+      this.flow = {
+        f1: 0.0022 + this.rnd() * 0.0016,
+        f2: 0.0026 + this.rnd() * 0.0018,
+        f3: 0.0038 + this.rnd() * 0.0026,
+        /* 时间项要够快：流场自己也在变，墨迹才不会绕着涡心
+           一圈圈卷成同心圆（那是最典型的"规则几何"破绽） */
+        s1: 0.045 + this.rnd() * 0.045,
+        s2: 0.038 + this.rnd() * 0.040,
+        s3: 0.055 + this.rnd() * 0.050,
+        fx: 0.15 + this.rnd() * 0.7,     /* 涡心位置（比例，随视口换算） */
+        fy: 0.15 + this.rnd() * 0.7,
+        vr: 0.55 + this.rnd() * 0.55,   /* 涡的影响半径（相对短边） */
+        /* 涡只做"轻轻带一下方向"，不做主控 —— 太强就成了漩涡图 */
+        vs: 0.30 + this.rnd() * 0.42,
+        spin: (this.rnd() < 0.5 ? -1 : 1) * (0.6 + this.rnd() * 0.6),
+        vx: 0,
+        vy: 0,
+        vr2: 1,
       };
 
       /* 覆盖度栅格：文字描边判定用 */
@@ -336,6 +268,13 @@
       this.rows = 1;
       this.grid = new Float32Array(1);
 
+      /* 绘制用的临时数组（按最大节点数预分配，避免每帧分配） */
+      this._cx = new Float32Array(80);
+      this._cy = new Float32Array(80);
+      this._nx = new Float32Array(80);
+      this._ny = new Float32Array(80);
+      this._ww = new Float32Array(80);
+
       this.anchors = [];
       this.texts = [];
       this.debug = /inkdebug/.test(window.location.search || "");
@@ -343,15 +282,16 @@
       const area = Math.max(1, (window.innerWidth || 1200) * (window.innerHeight || 800));
       const mobile = Math.min(window.innerWidth || 1200, window.innerHeight || 800) < 640;
       this.mobile = mobile;
-      /* 画面尺度：小屏上墨渍等比缩小，留白才守得住 */
+      /* 画面尺度：小屏上墨迹等比缩小，留白才守得住 */
       this.opt = {
-        scaleK: clamp(Math.sqrt(area / (1440 * 900)), 0.55, 1),
-        /* 各类墨渍的目标数量：写意要留白，宁可少而重 */
+        scaleK: clamp(Math.sqrt(area / (1440 * 900)), 0.6, 1),
+        /* 目标数量：写意要留白，宁可少而重 */
         target: mobile
-          ? { wash: 1, pool: 2, speck: 3 }
-          : { wash: 2, pool: 4, speck: 4 },
+          ? { band: 2, thread: 3, broad: 0 }
+          : { band: 2, thread: 4, broad: 1 },
       };
 
+      this.buildGrain();
       this.resize(true);
     }
 
@@ -370,22 +310,63 @@
       this.w = w;
       this.h = h;
       this.dpr = dpr;
-      /* 贴图分辨率：大墨渍不必跟满 dpr，省一半光栅化开销 */
-      this.sdpr = Math.min(dpr, 1.5);
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   /* 之后一律用 CSS 像素坐标 */
+
+      this.buildLayers();
+
+      const short = Math.min(w, h);
+      const F = this.flow;
+      F.vx = F.fx * w;
+      F.vy = F.fy * h;
+      F.vr2 = (short * F.vr) * (short * F.vr);
 
       this.cell = w < 640 ? 36 : 44;
       this.cols = Math.max(1, Math.ceil(w / this.cell));
       this.rows = Math.max(1, Math.ceil(h / this.cell));
       this.grid = new Float32Array(this.cols * this.rows);
 
-      /* 墨渍跟着新视口收进来（每帧整体重绘，不需要搬迁旧画面） */
-      for (let i = 0; i < this.blobs.length; i++) {
-        const b = this.blobs[i];
-        b.x = clamp(b.x, -b.r, this.w + b.r);
-        b.y = clamp(b.y, -b.r, this.h + b.r);
-      }
       if (!initial) this.render();
+    }
+
+    /* 三个离屏墨层：分辨率不同 → 上采样时的模糊半径不同 */
+    buildLayers() {
+      this.layers = [];
+      this.ctxs = [];
+      for (let i = 0; i < LAYERS.length; i++) {
+        const L = LAYERS[i];
+        const cv = document.createElement("canvas");
+        cv.width = Math.max(2, Math.round(this.w * L.s));
+        cv.height = Math.max(2, Math.round(this.h * L.s));
+        const c = cv.getContext("2d", { alpha: true });
+        /* 变换用实际像素比，保证 CSS 坐标与真实像素严格对应 */
+        c.setTransform(cv.width / this.w, 0, 0, cv.height / this.h, 0, 0);
+        this.layers.push(cv);
+        this.ctxs.push(c);
+      }
+      this.grainPat = null;
+    }
+
+    /* ---------- 纸张吸墨不均的噪声片（用于墨身的颗粒断裂） ---------- */
+    buildGrain() {
+      const S = 192;
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = S;
+      const g = cv.getContext("2d");
+      const img = g.createImageData(S, S);
+      const d = img.data;
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+          const v = fbm3(x * 0.055, y * 0.055, 11.3);
+          const v2 = noise3(x * 0.29, y * 0.29, 7.7);
+          let a = clamp((v * 0.62 + v2 * 0.38 - 0.46) * 2.8, 0, 1);
+          a = a * a;
+          const i = (y * S + x) * 4;
+          d[i] = 0; d[i + 1] = 0; d[i + 2] = 0;
+          d[i + 3] = (a * 255) | 0;
+        }
+      }
+      g.putImageData(img, 0, 0);
+      this.grain = cv;
     }
 
     /* ---------- 覆盖度栅格 ---------- */
@@ -438,13 +419,7 @@
         const el = nodes[i];
         const r = el.getBoundingClientRect();
         if (r.width < 6 || r.height < 6) continue;
-        out.push({
-          el: el,
-          left: r.left,
-          top: r.top + sy,
-          w: r.width,
-          h: r.height,
-        });
+        out.push({ el: el, left: r.left, top: r.top + sy, w: r.width, h: r.height });
       }
       this.anchors = out;
     }
@@ -463,35 +438,15 @@
         const r = el.getBoundingClientRect();
         if (r.width < 12 || r.height < 8) continue;
         const fs = parseFloat(window.getComputedStyle(el).fontSize) || 16;
-        const hw = fs >= 30 ? 5 : fs >= 19 ? 3.4 : 2.1;
+        /* 光晕宽度跟着字号走：大字笔画粗、墨压上来时更需要宽的纸色圈 */
+        const hw = fs >= 60 ? 7 : fs >= 30 ? 5 : fs >= 19 ? 3.4 : 2.1;
         if (el.__haloW !== hw) {
           el.__haloW = hw;
           el.style.setProperty("--halo-w", hw + "px");
         }
-        out.push({
-          el: el,
-          left: r.left,
-          top: r.top + sy,
-          w: r.width,
-          h: r.height,
-          on: false,
-        });
+        out.push({ el: el, left: r.left, top: r.top + sy, w: r.width, h: r.height, on: false });
       }
       this.texts = out;
-    }
-
-    /* 锚点附近取落墨点：多数落在文字块外侧，偶尔压进文字里 */
-    anchorPoint(a) {
-      const R = this.rnd;
-      const sy = window.scrollY || window.pageYOffset || 0;
-      const top = a.top - sy;
-      const p = R();
-      let x;
-      if (p < 0.4) x = a.left - 20 - R() * 90;
-      else if (p < 0.7) x = a.left + a.w + 20 + R() * 100;
-      else x = a.left + a.w * (0.1 + R() * 0.8);
-      const y = top + a.h * (0.1 + R() * 0.95) + (R() - 0.5) * 40;
-      return { x: clamp(x, -30, this.w + 30), y: clamp(y, -30, this.h + 30) };
     }
 
     pickAnchor() {
@@ -502,269 +457,428 @@
       for (let tryN = 0; tryN < 6; tryN++) {
         const cand = list[(this.rnd() * list.length) | 0];
         const vt = cand.top - sy;
-        if (vt > -120 && vt < this.h + 120) return cand;
+        if (vt > -160 && vt < this.h + 160) return cand;
       }
       return list[(this.rnd() * list.length) | 0];
     }
 
-    /* ---------- 落墨 ---------- */
-    spawnPoint() {
-      const a = this.pickAnchor();
-      if (a) return this.anchorPoint(a);
-      return { x: this.rnd() * this.w, y: this.rnd() * this.h };
+    /* 锚点附近取落墨点：多数落在文字块外侧，偶尔压进文字里 */
+    anchorPoint(a) {
+      const R = this.rnd;
+      const sy = window.scrollY || window.pageYOffset || 0;
+      const top = a.top - sy;
+      const p = R();
+      let x;
+      if (p < 0.42) x = a.left - 24 - R() * 110;
+      else if (p < 0.74) x = a.left + a.w + 24 + R() * 120;
+      else x = a.left + a.w * (0.1 + R() * 0.8);
+      const y = top + a.h * (0.05 + R() * 1.0) + (R() - 0.5) * 50;
+      return { x: clamp(x, -40, this.w + 40), y: clamp(y, -40, this.h + 40) };
     }
 
-    /* 只统计"活着"的墨渍：淡出期的（lifeT > 0.78）视觉上已近乎消失，
-       不能占着目标名额 —— 否则补墨逻辑会误以为构图还满着，画面就空了 */
+    /* ---------- 起笔点 ----------
+       三种起法：从画面边缘探进来（墨从纸外延伸入画）、
+       贴着已有的墨迹长出去（分叉与层叠）、
+       或者从界面元素旁边起笔（融入 UI）。 */
+    spawnPoint() {
+      const R = this.rnd;
+
+      /* 贴着已有墨迹：沿它的法线偏出去一点，方向顺着它 —— 这是"连续关系" */
+      if (this.ribs.length && R() < 0.42) {
+        const src = this.ribs[(R() * this.ribs.length) | 0];
+        const n = src.pts.length;
+        if (n > 6) {
+          const i = 2 + ((R() * (n - 5)) | 0);
+          const p = src.pts[i];
+          const a = src.pts[i - 1];
+          const b = src.pts[i + 1];
+          let tx = b.x - a.x;
+          let ty = b.y - a.y;
+          const tl = Math.sqrt(tx * tx + ty * ty) || 1;
+          tx /= tl;
+          ty /= tl;
+          const side = R() < 0.5 ? -1 : 1;
+          /* 起点贴着主带的边起笔 —— 差得远就成了"另一条线"，
+             贴着边才是从这一笔里分出去的一道 */
+          const off = src.hw * (1.02 + R() * 1.1);
+          const x = p.x - ty * side * off;
+          const y = p.y + tx * side * off;
+          if (x > -30 && x < this.w + 30 && y > -30 && y < this.h + 30) return { x: x, y: y };
+        }
+      }
+
+      /* 从边缘入画：必须顺着流场往画面里走。墨的上游在纸外，
+         如果流场此刻正把墨往外带，这条墨就只会扒在边上打转、
+         洇成一块没有方向的污渍 —— 所以宁可不从这里进 */
+      if (R() < 0.28) {
+        for (let k = 0; k < 5; k++) {
+          const e = (R() * 4) | 0;
+          let x, y, ix, iy;
+          if (e === 0) { x = -20 - R() * 70; y = R() * this.h; ix = 1; iy = 0; }
+          else if (e === 1) { x = this.w + 20 + R() * 70; y = R() * this.h; ix = -1; iy = 0; }
+          else if (e === 2) { x = R() * this.w; y = -20 - R() * 60; ix = 0; iy = 1; }
+          else { x = R() * this.w; y = this.h + 20 + R() * 60; ix = 0; iy = -1; }
+          velAt(x, y, this.t, this.flow, _v);
+          if (_v[0] * ix + _v[1] * iy > 0.18) return { x: x, y: y };
+        }
+      }
+
+      const a = this.pickAnchor();
+      if (a) return this.anchorPoint(a);
+      return { x: R() * this.w, y: R() * this.h };
+    }
+
+    /* 只统计"活着且在画面里"的：淡出期（lifeT > 0.86）的视觉上已
+       近乎消失；整条跑出视口的也不该占名额 —— 否则补墨逻辑会误以为
+       构图还满着，画面就空了 */
     countKind(kind) {
       let n = 0;
-      for (let i = 0; i < this.blobs.length; i++) {
-        const b = this.blobs[i];
-        if (b.kind === kind && b.lifeT < 0.78) n++;
+      for (let i = 0; i < this.ribs.length; i++) {
+        const r = this.ribs[i];
+        if (r.kind !== kind || r.age >= r.life * 0.86) continue;
+        if (this.offscreen(r)) continue;
+        n++;
       }
       return n;
     }
 
-    spawn(kind, x, y) {
-      const b = makeBlot(kind, x, y, this.rnd, this.opt.scaleK);
-      this.blobs.push(b);
-      return b;
+    /* ============================================================
+       起一笔墨
+       ------------------------------------------------------------
+       不是放一个点，是"写下"一段已有弧度的墨迹：从落笔点沿流场
+       往上游回溯，把 n 个节点串成一条已经弯曲的带子。所以页面
+       一打开就有完整的弧线，而不是先有一个点再长大。
+       ============================================================ */
+    spawnRibbon(kind, x, y) {
+      const K = KINDS[kind];
+      const R = this.rnd;
+      const sk = this.opt.scaleK;
+
+      const r = {
+        kind: kind,
+        K: K,
+        hw: lerp(K.hw[0], K.hw[1], R()) * sk,
+        speed: lerp(K.speed[0], K.speed[1], R()) * (0.82 + sk * 0.3),
+        seg: lerp(K.seg[0], K.seg[1], R()) * sk,
+        tens: lerp(K.tens[0], K.tens[1], R()),
+        life: lerp(K.life[0], K.life[1], R()) * (0.85 + R() * 0.3),
+        lay: K.lay,
+        seed: R() * 977,
+        age: 0,
+        massK: 1,
+        headAcc: 0,
+        headEvery: 0.5 + R() * 1.1,
+        /* 每笔对流向有一点点自己的偏置（±26°）：同一个流场里，
+           不同的墨走不同的路，构图才散得开、不会全挤在一处 */
+        bias: (R() - 0.5) * 0.9,
+        cb: 1,
+        sb: 0,
+        pts: [],
+      };
+      r.cb = Math.cos(r.bias);
+      r.sb = Math.sin(r.bias);
+
+      /* 初始曲线：以落点为中心，往上游回溯一段、往下游前伸一段。
+         这样一落纸就是一道完整的弧 —— 而不是先露出一个笔尖
+         （笔尖独自在角落滞留，会洇出一块没有方向的污渍）。
+         上游段长一些：尾巴要飘出去，头要留得住墨。 */
+      const n = Math.round(lerp(K.n[0], K.n[1], R()));
+      const half = Math.max(5, Math.round(n * 0.55));
+      const up = [];
+      const dn = [];
+
+      let cx = x;
+      let cy = y;
+      for (let i = 0; i < n - half; i++) {
+        up.push(this.mkPt(cx, cy, i, r));
+        const d = this.dirAt(cx, cy, r);
+        cx -= d[0] * r.seg;
+        cy -= d[1] * r.seg;
+      }
+
+      cx = x;
+      cy = y;
+      for (let i = 0; i < half; i++) {
+        const d = this.dirAt(cx, cy, r);
+        cx += d[0] * r.seg;
+        cy += d[1] * r.seg;
+        dn.push(this.mkPt(cx, cy, half + i, r));
+      }
+
+      /* 下标 0 = 最下游的笔尖，末尾 = 最上游的尾巴 */
+      dn.reverse();
+      r.pts = dn.concat(up);
+
+      this.ribs.push(r);
+      return r;
     }
 
-    /* 补齐目标数量；墨渍死亡后按当前缺口随机补一类 */
+    /* 一个墨节点：速度、张力、墨量各有一点自己的性子 */
+    mkPt(x, y, i, r) {
+      return {
+        x: x,
+        y: y,
+        /* 速度系数沿墨带平滑变化 → 整条带被剪切、拉伸，而不是刚性平移 */
+        sp: 0.62 + 0.76 * fbm3(i * 0.06, r.seed, 3.1),
+        tn: r.tens * (0.65 + 0.7 * noise3(i * 0.14, r.seed, 5.5)),
+        am: 0.55 + 0.9 * noise3(i * 0.09, r.seed + 17.3, 9.2),
+      };
+    }
+
+    /* 该笔在这一点上的流向（含它自己的偏置） */
+    dirAt(x, y, r) {
+      velAt(x, y, this.t, this.flow, _v);
+      const vx = _v[0] * r.cb - _v[1] * r.sb;
+      const vy = _v[0] * r.sb + _v[1] * r.cb;
+      _v[0] = vx;
+      _v[1] = vy;
+      return _v;
+    }
+
+    /* 补齐目标数量。两道保险：总数有硬上限；落点若整条跑到画外，
+       换一个画内的随机点重来 —— 否则 countKind 永远数不到它，
+       补墨会无限往里堆，帧率直接崩掉 */
     refill() {
       const t = this.opt.target;
+      const cap = this.mobile ? 9 : 15;
       for (let i = 0; i < KIND_NAMES.length; i++) {
         const k = KIND_NAMES[i];
-        while (this.countKind(k) < t[k]) {
+        const want = t[k] | 0;
+        let guard = 0;
+        while (this.countKind(k) < want && guard++ < 3 && this.ribs.length < cap) {
           const pt = this.spawnPoint();
-          this.spawn(k, pt.x, pt.y);
+          const r = this.spawnRibbon(k, pt.x, pt.y);
+          if (this.offscreen(r)) {
+            r.pts = [];
+            this.ribs.pop();
+            this.spawnRibbon(k, this.rnd() * this.w, this.rnd() * this.h);
+          }
         }
       }
     }
 
     /* ============================================================
-       墨渍贴图的重生成（低频：每 ~130ms 一次，分摊到各帧）
-       ------------------------------------------------------------
-       12 层错位轮廓叠印：外层大而淡（晕染），内层小而浓（核心）。
-       每层轮廓用不同的 salt，彼此不完全重合 —— 边缘因此呈
-       纤维状渗染，而不是一条干净的几何边。
+       一步：形态演化
        ============================================================ */
-    regen(b) {
-      const K = KINDS[b.kind];
-      const R = b.r;
-      const env = envOf(b);
-      if (env <= 0.01) return;                     /* 看不见的不画 */
-      /* 整个跑出视口的也不画（锚点在屏外时墨会跟出去） */
-      if (b.x < -R * 2 || b.x > this.w + R * 2 || b.y < -R * 2 || b.y > this.h + R * 2) return;
+    updateRibbon(r, dt) {
+      const P = r.pts;
+      const n = P.length;
+      const spd = r.speed;
 
-      const fiberMax = K.fiber > 0 ? 0.34 : 0;
-      const pad = Math.ceil(R * (1 + K.edgeAmp) * 1.32 + R * fiberMax + 10);
-      /* 尺寸量化到 48px 一档：呼吸与生长不会每次都触发重分配 */
-      const size = Math.ceil(pad * 2 / 48) * 48;
-
-      if (!b.cv || b.cv.width !== Math.ceil(size * this.sdpr)) {
-        b.cv = document.createElement("canvas");
-        b.cv.width = b.cv.height = Math.max(2, Math.ceil(size * this.sdpr));
-        b.cvPad = pad;
+      /* 1. 流场推进：每个节点速度不同 → 墨带被剪切、拉伸、扭曲 */
+      for (let i = 0; i < n; i++) {
+        const p = P[i];
+        const d = this.dirAt(p.x, p.y, r);
+        const s = spd * p.sp;
+        p.x += d[0] * s * dt;
+        p.y += d[1] * s * dt;
       }
-      const g = b.cv.getContext("2d");
-      g.setTransform(this.sdpr, 0, 0, this.sdpr, pad, pad);
-      g.clearRect(-pad, -pad, size, size);
 
-      const passes = this.mobile ? 9 : 11;
+      /* 2. 张力：节点被拉向相邻两点的中点。墨是有黏性的液体，
+         不会散成沙，也不会僵成直线 —— 这一条决定弧线的顺滑 */
+      for (let i = 1; i < n - 1; i++) {
+        const a = P[i - 1];
+        const b = P[i + 1];
+        const p = P[i];
+        const k = p.tn;
+        p.x += ((a.x + b.x) * 0.5 - p.x) * k;
+        p.y += ((a.y + b.y) * 0.5 - p.y) * k;
+      }
 
-      /* 干燥：越到后期核心越干、（泼墨）颜料越往边上聚 */
-      const dry = clamp((b.lifeT - 0.4) / 0.6, 0, 1);
+      /* 3. 持续更新：笔尖沿流场前探一格、尾巴退回纸里。
+         于是形态一直在换新的，但没有循环、没有关键帧 */
+      r.headAcc += dt;
+      if (r.headAcc >= r.headEvery) {
+        r.headAcc = 0;
+        const h = P[0];
+        const d = this.dirAt(h.x, h.y, r);
+        const nx = h.x + d[0] * r.seg * 0.9;
+        const ny = h.y + d[1] * r.seg * 0.9;
+        P.unshift({
+          x: nx,
+          y: ny,
+          sp: 0.62 + 0.76 * this.rnd(),
+          tn: r.tens * (0.65 + 0.7 * this.rnd()),
+          am: 0.55 + 0.9 * this.rnd(),
+        });
+        P.pop();
+      }
+    }
 
-      for (let p = 0; p < passes; p++) {
-        const tt = p / (passes - 1);                 /* 0 外晕 → 1 核心 */
-        const scale = lerp(1.32, 0.5, Math.pow(tt, 0.8));
-        /* 外层极淡、内层足浓；对比拉开，中心要真的"沉"下去 */
-        let a = lerp(0.016, 0.175, Math.pow(tt, 1.7)) * b.baseA * 2;
-        if (b.kind === "wash") a *= 0.8;
-        /* 干燥期核心变浅 */
-        a *= 1 - 0.3 * dry * (1 - tt * 0.5);
-        if (a <= 0.004) continue;
+    /* ============================================================
+       一笔的绘制：把中心线按逐点宽度扩成墨带
+       ------------------------------------------------------------
+       宽度 = 起笔宽度 × 收笔锥度 × 噪声起伏 × 拉伸系数
+       拉伸系数来自"质量守恒"：这一段被拉得越长，墨摊得越薄。
+       同一笔在三层里各画一遍，宽度倍数不同 —— core 是墨身、
+       mid 是洇开、soft 是外围的光晕。
+       ============================================================ */
+    drawRibbon(r, dt) {
+      const P = r.pts;
+      const n = P.length;
+      if (n < 3) return;
+      if (n > 80) return;
 
-        const salt = b.salt + p * 3.7;
-        const n = Math.max(16, Math.min(34, Math.round(R / 6)));
+      const K = r.K;
+      const base = r.massK * K.mass * 0.030 * (dt * 30);
+      if (base <= 0.0008) return;
+
+      const cx = this._cx, cy = this._cy, nx = this._nx, ny = this._ny, ww = this._ww;
+      const t = this.t;
+
+      for (let i = 0; i < n; i++) {
+        const p = P[i];
+        const a = P[i === 0 ? 0 : i - 1];
+        const b = P[i === n - 1 ? n - 1 : i + 1];
+        let tx = b.x - a.x;
+        let ty = b.y - a.y;
+        const tl = Math.sqrt(tx * tx + ty * ty) || 1;
+        tx /= tl;
+        ty /= tl;
+
+        /* 局部段长 → 拉伸系数 */
+        const q = P[i === n - 1 ? i : i + 1];
+        const ddx = q.x - p.x;
+        const ddy = q.y - p.y;
+        const sl = Math.sqrt(ddx * ddx + ddy * ddy) || r.seg;
+        /* 局部拉得越长墨越细（质量守恒）。上限压在 1.22：
+           挤在一起时只能"厚"一点，不能糊成一个圆团 —— 页面上
+           不允许出现圆形墨块，这是硬约束 */
+        const stretch = clamp(r.seg / sl, 0.34, 1.22);
+
+        const tt = i / (n - 1);
+        /* 起笔收锋 + 收笔散锋：两端都要收到细，不能是平切的断口 */
+        const headRoom = Math.min(1, i / 2.6);
+        const taper = lerp(1, K.taper, Math.pow(tt, 0.7)) * (0.25 + 0.75 * headRoom);
+
+        /* 两级噪声：低频决定粗细的节奏，高频是纸纤维造成的毛边 */
+        const n1 = noise3(p.x * 0.011 + r.seed, p.y * 0.011, t * 0.14);
+        const n2 = noise3(p.x * 0.072, p.y * 0.072 + r.seed, t * 0.42);
+        const wob = 0.5 + 0.66 * n1 + 0.52 * (n2 - 0.5);
+
+        const w = Math.max(0.3, p.am * r.hw * taper * wob * (0.55 + 0.55 * stretch));
+
+        cx[i] = p.x;
+        cy[i] = p.y;
+        nx[i] = -ty;
+        ny[i] = tx;
+        ww[i] = w;
+      }
+
+      for (let li = 0; li < LAYERS.length; li++) {
+        const wt = r.lay[li];
+        if (wt <= 0.02) continue;
+        const a = base * wt;
+        if (a < 0.0012) continue;
+        const wm = LAYERS[li].wm;
+        const g = this.ctxs[li];
+
+        /* (nx,ny) 已经是切线的法线，沿线两侧各偏移一个半宽 */
+        let o = ww[0] * wm;
         g.beginPath();
-        for (let i = 0; i <= n; i++) {
-          const ang = (i / n) * TAU;
-          const rr = R * scale * contourAt(b, ang, this.t, salt);
-          const px = Math.cos(ang) * rr;
-          const py = Math.sin(ang) * rr;
-          if (i === 0) g.moveTo(px, py);
-          else g.lineTo(px, py);
+        g.moveTo(cx[0] + nx[0] * o, cy[0] + ny[0] * o);
+        for (let i = 1; i < n; i++) {
+          o = ww[i] * wm;
+          g.lineTo(cx[i] + nx[i] * o, cy[i] + ny[i] * o);
+        }
+        for (let i = n - 1; i >= 0; i--) {
+          o = ww[i] * wm;
+          g.lineTo(cx[i] - nx[i] * o, cy[i] - ny[i] * o);
         }
         g.closePath();
-        g.fillStyle = inkA(Math.min(a, 0.85));
-        g.fill();
-      }
-
-      /* 咖啡环：将干时颜料聚到边缘，形成一圈深色渍沿 */
-      if (b.ringy && dry > 0.15) {
-        const ra = 0.16 * (dry - 0.15) * b.baseA;
-        const salt = b.salt + 91.3;
-        const n = Math.max(16, Math.min(34, Math.round(R / 6)));
-        g.beginPath();
-        for (let i = 0; i <= n; i++) {
-          const ang = (i / n) * TAU;
-          const rr = R * 1.02 * contourAt(b, ang, this.t, salt);
-          const px = Math.cos(ang) * rr;
-          const py = Math.sin(ang) * rr;
-          if (i === 0) g.moveTo(px, py);
-          else g.lineTo(px, py);
-        }
-        g.closePath();
-        g.lineWidth = Math.max(2, R * 0.1);
-        g.strokeStyle = inkA(Math.min(ra, 0.5));
-        g.stroke();
-      }
-
-      /* 毛细须：墨渍边缘向纸纤维里长出的细渗 */
-      if (b.fibers.length) {
-        g.lineCap = "round";
-        for (let i = 0; i < b.fibers.length; i++) {
-          const f = b.fibers[i];
-          /* 每根须有自己的生长节律：噪声门控，时隐时现 */
-          const gw = fbm3(f.ph, b.seed, this.t * b.cSpeed * 2.2);
-          const on = clamp((gw - 0.42) * 4.5, 0, 1);
-          if (on <= 0.05) continue;
-          const rr = R * contourAt(b, f.ang, this.t, b.salt);
-          const len = R * f.len * (0.6 + 0.8 * gw) * (1 - dry * 0.4);
-          const x0 = Math.cos(f.ang) * rr * 0.86;
-          const y0 = Math.sin(f.ang) * rr * 0.86;
-          const x1 = Math.cos(f.ang) * (rr + len);
-          const y1 = Math.sin(f.ang) * (rr + len);
-          g.strokeStyle = inkA(f.a * on * b.baseA);
-          g.lineWidth = f.w;
-          g.beginPath();
-          g.moveTo(x0, y0);
-          g.lineTo(x1, y1);
-          g.stroke();
-        }
-      }
-
-      /* 内部深斑：浓淡不均的颜料堆积 */
-      for (let i = 0; i < b.blotches.length; i++) {
-        const bl = b.blotches[i];
-        const br = R * bl.r * (0.8 + 0.4 * fbm3(bl.salt, b.seed, this.t * b.bSpeed * 3));
-        const bx = bl.ox * R * 0.55;
-        const by = bl.oy * R * 0.55;
-        const n = 14;
-        g.beginPath();
-        for (let j = 0; j <= n; j++) {
-          const ang = (j / n) * TAU;
-          const rr = br * contourAt(b, ang, this.t, bl.salt);
-          const px = bx + Math.cos(ang) * rr;
-          const py = by + Math.sin(ang) * rr;
-          if (j === 0) g.moveTo(px, py);
-          else g.lineTo(px, py);
-        }
-        g.closePath();
-        g.fillStyle = inkA(Math.min(bl.a * b.baseA * (1 - dry * 0.35), 0.6));
-        g.fill();
-      }
-
-      /* 卫星墨点：主渍周围溅开的小点 */
-      for (let i = 0; i < b.sats.length; i++) {
-        const s = b.sats[i];
-        const d = R * s.dist;
-        g.beginPath();
-        g.arc(Math.cos(s.ang) * d, Math.sin(s.ang) * d, s.r, 0, TAU);
-        g.fillStyle = inkA(s.a * b.baseA);
+        g.fillStyle = inkA(Math.min(0.93, a));
         g.fill();
       }
     }
 
-    /* ---------- 单步 ---------- */
-    step(dt) {
-      this.t += dt;
-      this.frame++;
-      const blobs = this.blobs;
-
-      for (let i = blobs.length - 1; i >= 0; i--) {
-        const b = blobs[i];
-        b.age += dt;
-        b.lifeT = b.age / b.life;
-        if (b.lifeT >= 1) {
-          blobs.splice(i, 1);
-          continue;
-        }
-
-        const K = KINDS[b.kind];
-
-        /* 4. 慢速漂移：无散度流场推着走，重阻尼 —— 漫游而非飞行 */
-        flowAt(b.x, b.y, this.t, this.k, _v);
-        b.vx += _v[0] * K.drift * dt;
-        b.vy += _v[1] * K.drift * dt;
-        const drag = Math.pow(0.2, dt);
-        b.vx *= drag;
-        b.vy *= drag;
-        b.x += b.vx * dt;
-        b.y += b.vy * dt;
-
-        /* 半径：√t 毛细扩散 + 呼吸噪声（各自独立周期） */
-        const grow = Math.min(Math.sqrt(1 + b.age / K.diffuse), K.maxGrow);
-        const br = 1 + 0.13 * (fbm3(b.bPh, b.seed, this.t * b.bSpeed) - 0.5) * 2;
-        b.r = Math.max(3, b.r0 * grow * br);
-
-        /* 分离：浓墨池偶尔在边缘裂出一粒小墨点，慢慢漂走 */
-        if (b.kind === "pool" && this.countKind("speck") < this.opt.target.speck + 2 && this.rnd() < 0.0012) {
-          const ang = this.rnd() * TAU;
-          const s = this.spawn("speck", b.x + Math.cos(ang) * b.r * 0.9, b.y + Math.sin(ang) * b.r * 0.9);
-          s.vx = Math.cos(ang) * 9;
-          s.vy = Math.sin(ang) * 9;
-        }
+    /* ---------- 干燥：按各自的半衰期褪去 ---------- */
+    decay(dt) {
+      for (let i = 0; i < LAYERS.length; i++) {
+        const g = this.ctxs[i];
+        const a = 1 - Math.exp(-dt / LAYERS[i].tau);
+        if (a <= 0) continue;
+        g.save();
+        g.globalCompositeOperation = "destination-out";
+        g.globalAlpha = a;
+        g.fillStyle = "#000";
+        g.fillRect(0, 0, this.w, this.h);
+        g.restore();
       }
-
-      /* 补墨：保持构图不空，但节奏很慢 */
-      if (this.frame % 60 === 0) this.refill();
-
-      /* 贴图低频重生成（错峰：每帧至多重生成一两个墨渍） */
-      let regens = 0;
-      for (let i = 0; i < blobs.length && regens < 2; i++) {
-        const b = blobs[i];
-        if (this.t >= b.nextR) {
-          this.regen(b);
-          b.nextR = this.t + 0.11 + this.rnd() * 0.09;
-          regens++;
-        }
-      }
-
-      this.render();
     }
 
+    /* ---------- 颗粒断裂：纸吸墨不匀，墨身局部透气 ---------- */
+    erode() {
+      const g = this.ctxs[0];
+      if (!g) return;
+      if (!this.grainPat) {
+        try {
+          this.grainPat = g.createPattern(this.grain, "repeat");
+        } catch (_) {
+          this.grainPat = null;
+        }
+      }
+      if (!this.grainPat) return;
+      const S = this.grain.width;
+      g.save();
+      g.globalCompositeOperation = "destination-out";
+      g.globalAlpha = 0.055;
+      g.fillStyle = this.grainPat;
+      g.translate(-this.rnd() * S, -this.rnd() * S);
+      g.fillRect(0, 0, this.w + S, this.h + S);
+      g.restore();
+    }
+
+    offscreen(r) {
+      const P = r.pts;
+      const m = 140;
+      for (let i = 0; i < P.length; i += 4) {
+        const p = P[i];
+        if (p.x > -m && p.x < this.w + m && p.y > -m && p.y < this.h + m) return false;
+      }
+      return true;
+    }
+
+    /* ---------- 合成：三层墨按序压到纸上 ---------- */
     render() {
       const ctx = this.ctx;
       ctx.clearRect(0, 0, this.w, this.h);
-      for (let i = 0; i < this.blobs.length; i++) {
-        const b = this.blobs[i];
-        if (!b.cv) continue;
-        const env = envOf(b);
-        if (env <= 0.002) continue;
-
-        /* 拉伸：沿一条缓慢转向的轴横向洇开（各墨渍独立） */
-        const st = 1 + b.stAmp * (fbm3(b.seed, b.stAng * 9.1, this.t * b.stSpeed) - 0.5) * 2;
-        const ang = b.stAng + this.t * b.stSpeed * 0.6;
-
-        ctx.save();
-        ctx.translate(b.x, b.y);
-        ctx.rotate(ang);
-        ctx.scale(Math.max(0.6, st), Math.max(0.6, 2 - st));
-        ctx.rotate(-ang);
-        ctx.globalAlpha = env;
-        /* 九参形式：贴图按 48px 量化分配，实际墨区只有 pad*2，
-           必须只取用到的源区域，整张画会错位 */
-        ctx.drawImage(
-          b.cv, 0, 0, b.cvPad * 2 * this.sdpr, b.cvPad * 2 * this.sdpr,
-          -b.cvPad, -b.cvPad, b.cvPad * 2, b.cvPad * 2
-        );
-        ctx.restore();
+      for (let i = LAYERS.length - 1; i >= 0; i--) {
+        ctx.globalAlpha = LAYERS[i].out;
+        ctx.drawImage(this.layers[i], 0, 0, this.w, this.h);
       }
       ctx.globalAlpha = 1;
+    }
+
+    step(dt) {
+      this.t += dt;
+      this.frame++;
+
+      /* 涡心缓慢游走：墨绕着它走，但环永远合不上 —— 环形一闭，
+         画面立刻变成"几何图形"而不是墨迹 */
+      const F = this.flow;
+      F.vx = (F.fx + 0.06 * (noise3(this.t * 0.035, 3.7, 0.9) - 0.5) * 2) * this.w;
+      F.vy = (F.fy + 0.06 * (noise3(this.t * 0.031, 9.3, 4.1) - 0.5) * 2) * this.h;
+
+      for (let i = this.ribs.length - 1; i >= 0; i--) {
+        const r = this.ribs[i];
+        r.age += dt;
+        const lt = r.age / r.life;
+        /* 末期出墨量衰减：墨迹是"淡去"，不是忽然消失 */
+        if (lt > 0.7) r.massK = Math.max(0, 1 - (lt - 0.7) / 0.3);
+        this.updateRibbon(r, dt);
+        this.drawRibbon(r, dt);
+        if (lt >= 1 || this.offscreen(r)) this.ribs.splice(i, 1);
+      }
+
+      if (this.frame % 9 === 0) this.erode();
+      this.decay(dt);
+      if (!this.noRender) this.render();
+
+      this.refillAcc += dt;
+      if (this.refillAcc >= 1.4) {
+        this.refillAcc = 0;
+        this.refill();
+      }
     }
 
     /* ---------- 文字识别墨迹 → 自动描边 ---------- */
@@ -774,11 +888,13 @@
 
       /* 覆盖度栅格是"当下"的快照：墨淡去了，描边也该跟着撤 */
       this.grid.fill(0);
-      for (let i = 0; i < this.blobs.length; i++) {
-        const b = this.blobs[i];
-        const env = envOf(b);
-        if (env <= 0.02) continue;
-        this.gridAdd(b.x, b.y, b.r * 1.12, env * b.baseA * 0.8);
+      for (let i = 0; i < this.ribs.length; i++) {
+        const r = this.ribs[i];
+        const P = r.pts;
+        const rad = Math.max(5, r.hw * 1.7);
+        for (let j = 0; j < P.length; j += 2) {
+          this.gridAdd(P[j].x, P[j].y, rad, 0.42 * r.massK);
+        }
       }
 
       /* 调试：?inkdebug 把引擎状态写到画布 data 属性，无头渲染可读 */
@@ -794,18 +910,21 @@
             if (px[i] > 40) cover++;
           }
         } catch (_) {}
-        let nw = 0, np = 0, ns = 0;
-        for (let i = 0; i < this.blobs.length; i++) {
-          const k = this.blobs[i].kind;
-          if (k === "wash") nw++;
-          else if (k === "pool") np++;
-          else ns++;
+
+        let nb = 0, nt = 0, nw = 0, pts = 0;
+        for (let i = 0; i < this.ribs.length; i++) {
+          const r = this.ribs[i];
+          if (r.kind === "band") nb++;
+          else if (r.kind === "thread") nt++;
+          else nw++;
+          pts += r.pts.length;
         }
         this.canvas.setAttribute(
           "data-ink",
           "t=" + this.t.toFixed(1) +
-          " blobs=" + this.blobs.length +
-          " w/p/s=" + nw + "/" + np + "/" + ns +
+          " ribs=" + this.ribs.length +
+          " b/t/w=" + nb + "/" + nt + "/" + nw +
+          " pts=" + pts +
           " cover=" + (sampled ? (cover / sampled * 100).toFixed(2) + "%" : "-") +
           " peakA=" + (peak / 255).toFixed(3) +
           " frame=" + this.frame
@@ -863,24 +982,23 @@
       this.raf = 0;
     }
 
-    /* ---------- 开局：纸上已有几团在洇的墨 ---------- */
+    /* ---------- 开局：纸上已有几笔在走的墨 ---------- */
     prime() {
       this.collectAnchors();
       this.collectTexts();
       this.refill();
 
-      /* 各墨渍的年龄错开：有的刚落纸，有的已洇开一半 */
-      for (let i = 0; i < this.blobs.length; i++) {
-        const b = this.blobs[i];
-        b.age = this.rnd() * b.life * 0.55;
-        b.lifeT = b.age / b.life;
-        const K = KINDS[b.kind];
-        const grow = Math.min(Math.sqrt(1 + b.age / K.diffuse), K.maxGrow);
-        b.r = b.r0 * grow;
+      /* 各笔的年龄错开：有的刚起笔，有的已经走了大半程 */
+      for (let i = 0; i < this.ribs.length; i++) {
+        const r = this.ribs[i];
+        r.age = this.rnd() * r.life * 0.4;
       }
 
-      /* 空跑 3 秒，让轮廓、漂移、贴图全部就位 */
-      for (let i = 0; i < 90; i++) this.step(1 / 30);
+      /* 空跑 2 秒：让墨积到可读的浓度（期间不做全屏合成，省开销） */
+      this.noRender = true;
+      for (let i = 0; i < 60; i++) this.step(1 / 30);
+      this.noRender = false;
+      this.render();
     }
   }
 
@@ -908,7 +1026,7 @@
       : false;
 
     for (let i = 0; i < hosts.length; i++) {
-      const f = new LivingInk(hosts[i]);
+      const f = new FlowingInk(hosts[i]);
       f.prime();
       fields.push(f);
       if (!reduce) f.start();
@@ -919,9 +1037,14 @@
     /* 调试：?inkwarp=N 把模拟快进 N 秒（无头渲染没有真实时钟） */
     const warp = (window.location.search.match(/inkwarp=([\d.]+)/) || [])[1];
     if (warp) {
-      const n = Math.round(Math.min(300, parseFloat(warp)) * 30);
+      const n = Math.round(Math.min(120, parseFloat(warp)) * 30);
       for (let i = 0; i < fields.length; i++) {
-        for (let s = 0; s < n; s++) fields[i].step(1 / 30);
+        const f = fields[i];
+        f.noRender = true;
+        for (let s = 0; s < n; s++) f.step(1 / 30);
+        f.noRender = false;
+        f.render();
+        f.haloTick(1e7);
       }
     }
 
@@ -956,7 +1079,7 @@
     return fields;
   }
 
-  /* 新的界面区块进入视口时补一团墨 —— 墨跟着界面出现 */
+  /* 新的界面区块进入视口时，从它旁边引一道墨出来 */
   function bindRevealObserver() {
     if (!("IntersectionObserver" in window)) return;
     const io = new IntersectionObserver(
@@ -969,7 +1092,7 @@
             const f = fields[j];
             const x = clamp(r.left + r.width * (0.1 + f.rnd() * 0.5), 30, f.w - 30);
             const y = clamp(r.top + r.height * (0.2 + f.rnd() * 0.5), 30, f.h - 30);
-            f.spawn(f.rnd() < 0.6 ? "pool" : "wash", x, y);
+            f.spawnRibbon(f.rnd() < 0.62 ? "band" : "thread", x, y);
             break;
           }
           io.unobserve(e.target);
